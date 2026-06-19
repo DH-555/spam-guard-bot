@@ -1,6 +1,6 @@
 services:
   bot:
-    image: ${BOT_IMAGE:?BOT_IMAGE must be set}
+    image: ${BOT_IMAGE:-ghcr.io/dh-555/d5-spam-guard-bot:latest}
     restart: unless-stopped
     init: true
     env_file:
