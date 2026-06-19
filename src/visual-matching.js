@@ -1,7 +1,8 @@
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, relative, resolve } from "node:path";
-import { Jimp } from "jimp";
+import sharp from "sharp";
 
+const HASH_ALGORITHM = "sharp-dhash-64-v1";
 const IMAGE_EXTENSIONS = new Set([
   ".avif",
   ".bmp",
@@ -74,9 +75,26 @@ export async function loadVisualReferenceSources(referencePath) {
   return [];
 }
 
-async function computeImageHash(imagePath) {
-  const image = await Jimp.read(imagePath);
-  return image.pHash();
+async function computeImageHash(input) {
+  const pixels = await sharp(input, { animated: false })
+    .autoOrient()
+    .grayscale()
+    .resize(9, 8, { fit: "fill", kernel: sharp.kernel.lanczos3 })
+    .raw()
+    .toBuffer();
+  let hash = "";
+
+  for (let row = 0; row < 8; row += 1) {
+    const rowOffset = row * 9;
+
+    for (let column = 0; column < 8; column += 1) {
+      hash += pixels[rowOffset + column] > pixels[rowOffset + column + 1]
+        ? "1"
+        : "0";
+    }
+  }
+
+  return hash;
 }
 
 export async function generateVisualReferenceManifest(referencePath) {
@@ -91,6 +109,7 @@ export async function generateVisualReferenceManifest(referencePath) {
   }
 
   return {
+    algorithm: HASH_ALGORITHM,
     generatedAt: new Date().toISOString(),
     references,
   };
@@ -135,6 +154,14 @@ export async function loadVisualReferenceManifest(manifestPath) {
   try {
     const contents = await readFile(manifestPath, "utf8");
     const parsed = JSON.parse(contents);
+
+    if (!Array.isArray(parsed) && parsed?.algorithm !== HASH_ALGORITHM) {
+      throw new Error(
+        `Visual reference manifest uses an unsupported hash algorithm. ` +
+          `Regenerate it with "pnpm build:visual-references".`,
+      );
+    }
+
     const entries = Array.isArray(parsed)
       ? parsed
       : Array.isArray(parsed?.references)
@@ -168,8 +195,7 @@ function hammingDistance(hashA, hashB) {
 }
 
 async function hashCandidateImage(buffer) {
-  const image = await Jimp.read(buffer);
-  return image.pHash();
+  return computeImageHash(buffer);
 }
 
 export async function buildVisualReferenceMatcher(references, threshold) {

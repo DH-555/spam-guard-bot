@@ -3,13 +3,31 @@ import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Jimp, JimpMime } from "jimp";
+import sharp from "sharp";
 import { createMessageHandler } from "../src/moderation.js";
 import {
   buildVisualReferenceMatcher,
   loadVisualReferenceManifest,
   writeVisualReferenceManifest,
 } from "../src/visual-matching.js";
+
+function createHorizontalGradient(width, height, reversed = false) {
+  const pixels = Buffer.alloc(width * height * 3);
+
+  for (let row = 0; row < height; row += 1) {
+    for (let column = 0; column < width; column += 1) {
+      const value = reversed
+        ? Math.round(255 * (1 - column / (width - 1)))
+        : Math.round(255 * (column / (width - 1)));
+      const offset = (row * width + column) * 3;
+      pixels.fill(value, offset, offset + 3);
+    }
+  }
+
+  return sharp(pixels, { raw: { width, height, channels: 3 } })
+    .png()
+    .toBuffer();
+}
 
 test("moderates and posts a fallback notice when no moderation channel is configured", async () => {
   const originalFetch = globalThis.fetch;
@@ -122,29 +140,13 @@ test("deletes the whole message when only one image matches", async () => {
   const originalFetch = globalThis.fetch;
 
   const tempDirectory = await mkdtemp(join(tmpdir(), "visual-single-match-"));
-  const referencePath = join(tempDirectory, "reference-black.png");
-  const blackReference = await new Jimp({
-    width: 32,
-    height: 32,
-    color: 0x000000ff,
-  });
-  await blackReference.write(referencePath);
-
-  const whiteImage = await new Jimp({
-    width: 32,
-    height: 32,
-    color: 0xffffffff,
-  });
-  const blackImage = await new Jimp({
-    width: 32,
-    height: 32,
-    color: 0x000000ff,
-  });
-  const whiteBuffer = await whiteImage.getBuffer(JimpMime.png);
-  const blackBuffer = await blackImage.getBuffer(JimpMime.png);
+  const referencePath = join(tempDirectory, "reference-gradient.png");
+  const matchingBuffer = await createHorizontalGradient(32, 32);
+  const safeBuffer = await createHorizontalGradient(32, 32, true);
+  await sharp(matchingBuffer).toFile(referencePath);
 
   globalThis.fetch = async (url) => {
-    const buffer = url.includes("black") ? blackBuffer : whiteBuffer;
+    const buffer = url.includes("matching") ? matchingBuffer : safeBuffer;
 
     return {
       ok: true,
@@ -223,7 +225,7 @@ test("deletes the whole message when only one image matches", async () => {
             name: "matching.png",
             contentType: "image/png",
             size: 4,
-            url: "https://example.com/black.png",
+            url: "https://example.com/matching.png",
           },
         ],
       ]),

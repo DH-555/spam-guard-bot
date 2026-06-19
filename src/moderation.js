@@ -1,4 +1,5 @@
 import { EmbedBuilder } from "discord.js";
+import { performance } from "node:perf_hooks";
 import { containsScamPhrase, truncateText } from "./detection.js";
 import { downloadImage, getMessageImageSources } from "./images.js";
 import { resolveLocale, t } from "./i18n.js";
@@ -26,14 +27,24 @@ async function findMatchingImage(message, config, ocrService, visualMatcher) {
     }
 
     try {
+      const analysisStartedAt = performance.now();
+      const downloadStartedAt = performance.now();
       const image = await downloadImage(
         source.url,
         config.maxImageBytes,
         config.imageDownloadTimeoutMs,
       );
+      const downloadMs = performance.now() - downloadStartedAt;
+      const visualStartedAt = performance.now();
       const visualMatch = visualMatcher ? await visualMatcher.match(image) : null;
+      const visualMs = performance.now() - visualStartedAt;
 
       if (visualMatch) {
+        console.log(
+          `[Image analysis] ${source.label}: visual match "${visualMatch.reference.label}" ` +
+            `(distance ${visualMatch.distance}; download ${downloadMs.toFixed(0)} ms; ` +
+            `hash ${visualMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
+        );
         return {
           source,
           kind: "visual",
@@ -41,7 +52,14 @@ async function findMatchingImage(message, config, ocrService, visualMatcher) {
         };
       }
 
+      const ocrStartedAt = performance.now();
       const text = await ocrService.recognize(image);
+      const ocrMs = performance.now() - ocrStartedAt;
+      console.log(
+        `[Image analysis] ${source.label}: no visual match ` +
+          `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
+          `OCR ${ocrMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
+      );
 
       if (containsScamPhrase(text)) {
         return { source, kind: "ocr", text };
