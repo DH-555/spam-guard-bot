@@ -1,0 +1,2 @@
+# Anti Mr Scam bot
+
