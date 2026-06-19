@@ -1,6 +1,6 @@
 # Anti Mr Scam bot
 
-A Node.js Discord bot that uses OCR to analyze attached images and images shown
+A Node.js Discord bot that uses OCR and image hashing to analyze attached images and images shown
 in Discord link previews. When an image contains a withdrawal keyword and a
 successful-status keyword, the bot:
 
