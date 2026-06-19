@@ -1,0 +1,103 @@
+import "dotenv/config";
+import { resolve } from "node:path";
+import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
+import { loadConfig } from "./config.js";
+import { createMessageHandler } from "./moderation.js";
+import { OcrService } from "./ocr.js";
+import { SettingsStore } from "./settings-store.js";
+import {
+  createSetupCommandHandler,
+  registerSetupCommandForGuild,
+  registerSetupCommands,
+} from "./setup-command.js";
+
+const config = loadConfig();
+const ocrService = new OcrService();
+const settingsStore = new SettingsStore(resolve("data/settings.json"));
+await settingsStore.load();
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+  ],
+});
+const handleMessage = createMessageHandler({
+  client,
+  config,
+  ocrService,
+  settingsStore,
+});
+const handleSetupCommand = createSetupCommandHandler({ settingsStore });
+
+client.once(Events.ClientReady, async (readyClient) => {
+  console.log(`Bot connected as ${readyClient.user.tag}.`);
+
+  try {
+    await registerSetupCommands(readyClient);
+    console.log("Setup commands registered.");
+  } catch (error) {
+    console.error("[Discord] Could not register setup commands:", error);
+  }
+});
+
+client.on(Events.GuildCreate, (guild) => {
+  void registerSetupCommandForGuild(guild).catch((error) => {
+    console.error(
+      `[Discord] Could not register setup commands in guild ${guild.id}:`,
+      error,
+    );
+  });
+});
+
+client.on(Events.MessageCreate, (message) => {
+  void handleMessage(message).catch((error) => {
+    console.error(
+      `[Moderation] Failed to process message ${message.id}:`,
+      error,
+    );
+  });
+});
+
+client.on(Events.MessageUpdate, (_oldMessage, newMessage) => {
+  void handleMessage(newMessage).catch((error) => {
+    console.error(
+      `[Moderation] Failed to process updated message ${newMessage.id}:`,
+      error,
+    );
+  });
+});
+
+client.on(Events.InteractionCreate, (interaction) => {
+  void handleSetupCommand(interaction).catch((error) => {
+    console.error("[Discord] Failed to process setup command:", error);
+
+    const response = {
+      content: "The configuration could not be saved. Check the bot logs.",
+      flags: MessageFlags.Ephemeral,
+    };
+
+    if (interaction.replied || interaction.deferred) {
+      void interaction.followUp(response);
+    } else if (interaction.isRepliable()) {
+      void interaction.reply(response);
+    }
+  });
+});
+
+client.on(Events.Error, (error) => {
+  console.error("[Discord] Client error:", error);
+});
+
+async function shutdown(signal) {
+  console.log(`Received ${signal}. Shutting down...`);
+  client.destroy();
+  await ocrService.terminate();
+  process.exit(0);
+}
+
+process.once("SIGINT", () => void shutdown("SIGINT"));
+process.once("SIGTERM", () => void shutdown("SIGTERM"));
+
+await client.login(config.discordToken);
