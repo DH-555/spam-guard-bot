@@ -205,7 +205,7 @@ It performs these steps:
 The published image name is:
 
 ```text
-ghcr.io/dh-555/d5-spam-guard-bot
+ghcr.io/dh-555/spam-guard-bot
 ```
 
 ### Server preparation
@@ -335,6 +335,12 @@ To regenerate the manifest locally:
 
 ```bash
 pnpm build:visual-references
+```
+
+With the current reference folder, startup logs should include:
+
+```text
+[Visual matching] Loaded 8 reference hash(es).
 ```
 
 Discord limits timeouts to a maximum of 28 days.

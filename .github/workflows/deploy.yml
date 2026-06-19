@@ -39,10 +39,10 @@ jobs:
       - name: Run tests
         run: pnpm test
 
-      - name: Set lowercase image name
+      - name: Set image name
         id: image
         shell: bash
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+        run: echo "name=ghcr.io/dh-555/spam-guard-bot" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
