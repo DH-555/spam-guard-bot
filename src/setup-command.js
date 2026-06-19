@@ -4,6 +4,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from "discord.js";
+import { resolveLocale, t } from "./i18n.js";
 
 const setupCommand = new SlashCommandBuilder()
   .setName("setup")
@@ -49,7 +50,7 @@ export function createSetupCommandHandler({ settingsStore }) {
 
     if (!interaction.inGuild()) {
       await interaction.reply({
-        content: "This command can only be used inside a server.",
+        content: t(resolveLocale(interaction), "setup", "onlyInServer"),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -57,11 +58,13 @@ export function createSetupCommandHandler({ settingsStore }) {
 
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
       await interaction.reply({
-        content: "You need the Manage Server permission to use this command.",
+        content: t(resolveLocale(interaction), "setup", "manageServerRequired"),
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
+
+    const locale = resolveLocale(interaction);
 
     const subcommand = interaction.options.getSubcommand();
 
@@ -82,8 +85,7 @@ export function createSetupCommandHandler({ settingsStore }) {
         ])
       ) {
         await interaction.reply({
-          content:
-            "The bot needs View Channel, Send Messages, and Embed Links permissions in the selected channel.",
+          content: t(locale, "setup", "missingBotPermissions"),
           flags: MessageFlags.Ephemeral,
         });
         return;
@@ -94,7 +96,7 @@ export function createSetupCommandHandler({ settingsStore }) {
         channel.id,
       );
       await interaction.reply({
-        content: `Moderation alerts will now be sent to ${channel}.`,
+        content: t(locale, "setup", "saved", channel),
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -103,8 +105,8 @@ export function createSetupCommandHandler({ settingsStore }) {
     const channelId = settingsStore.getModerationChannelId(interaction.guildId);
     await interaction.reply({
       content: channelId
-        ? `The moderation channel is currently set to <#${channelId}>.`
-        : "No moderation channel has been configured. Use `/setup moderation-channel`.",
+        ? t(locale, "setup", "currentSet", channelId)
+        : t(locale, "setup", "notConfigured"),
       flags: MessageFlags.Ephemeral,
     });
   };

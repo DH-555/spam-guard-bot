@@ -1,16 +1,17 @@
 import { EmbedBuilder } from "discord.js";
 import { containsScamPhrase, truncateText } from "./detection.js";
 import { downloadImage, getMessageImageSources } from "./images.js";
+import { resolveLocale, t } from "./i18n.js";
 
 const REASON =
   "Image detected containing withdrawal and successful-status keywords.";
 
-function resultLabel(result) {
+function resultLabel(result, locale) {
   if (result.status === "fulfilled") {
-    return "Yes";
+    return t(locale, "moderation", "yes");
   }
 
-  return `No: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`;
+  return t(locale, "moderation", "noPrefix", result.reason instanceof Error ? result.reason.message : String(result.reason));
 }
 
 async function findMatchingImage(message, config, ocrService) {
@@ -51,6 +52,7 @@ async function sendModerationAlert(
   moderationChannelId,
   deleteResult,
   timeoutResult,
+  locale,
 ) {
   const channel = await client.channels.fetch(moderationChannelId);
 
@@ -63,51 +65,64 @@ async function sendModerationAlert(
   const timeoutMinutes = Math.round(config.timeoutMs / 60_000);
   const embed = new EmbedBuilder()
     .setColor(0xed4245)
-    .setTitle("Suspicious image blocked")
-    .setDescription(
-      "Withdrawal and successful-status keywords were detected in an image.",
-    )
+    .setTitle(t(locale, "moderation", "alertTitle"))
+    .setDescription(t(locale, "moderation", "alertDescription"))
     .addFields(
       {
-        name: "User",
+        name: t(locale, "moderation", "user"),
         value: `${message.author} (\`${message.author.id}\`)`,
       },
       {
-        name: "Channel",
+        name: t(locale, "moderation", "channel"),
         value: `${message.channel} (\`${message.channelId}\`)`,
       },
       {
-        name: "Message",
+        name: t(locale, "moderation", "message"),
         value: `\`${message.id}\``,
         inline: true,
       },
       {
-        name: "Image source",
+        name: t(locale, "moderation", "imageSource"),
         value: truncateText(match.source.label, 1024),
         inline: true,
       },
       {
-        name: `Timeout (${timeoutMinutes} min)`,
-        value: resultLabel(timeoutResult),
+        name: t(locale, "moderation", "timeout", timeoutMinutes),
+        value: resultLabel(timeoutResult, locale),
         inline: true,
       },
       {
-        name: "Message deleted",
-        value: resultLabel(deleteResult),
+        name: t(locale, "moderation", "messageDeleted"),
+        value: resultLabel(deleteResult, locale),
         inline: true,
       },
       {
-        name: "Recognized text",
-        value: truncateText(match.text) || "(empty)",
+        name: t(locale, "moderation", "recognizedText"),
+        value: truncateText(match.text) || t(locale, "moderation", "emptyText"),
       },
     )
     .setThumbnail(message.author.displayAvatarURL())
     .setTimestamp();
 
   await channel.send({
-    content: `Moderation alert: ${message.author.tag}`,
+    content: t(locale, "moderation", "alertContent", message.author.tag),
     embeds: [embed],
     allowedMentions: { parse: [] },
+  });
+}
+
+async function sendFallbackNotice(message, locale) {
+  const channel = message.channel;
+
+  if (!channel?.isTextBased?.() || !channel.isSendable?.()) {
+    throw new Error(
+      "The channel where the message was deleted cannot receive fallback notices.",
+    );
+  }
+
+  await channel.send({
+    content: t(locale, "moderation", "fallbackNotice", message.author),
+    allowedMentions: { users: [message.author.id], roles: [], repliedUser: false },
   });
 }
 
@@ -129,10 +144,7 @@ export function createMessageHandler({
     const moderationChannelId = settingsStore.getModerationChannelId(
       message.guildId,
     );
-
-    if (!moderationChannelId) {
-      return;
-    }
+    const locale = resolveLocale(message.guild);
 
     const match = await findMatchingImage(message, config, ocrService);
 
@@ -147,9 +159,7 @@ export function createMessageHandler({
         (await message.guild.members.fetch(message.author.id));
 
       if (!member.moderatable) {
-        throw new Error(
-          "The bot cannot apply a timeout because of permissions or role hierarchy.",
-        );
+        throw new Error(t(locale, "moderation", "timeoutFailure"));
       }
 
       return member.timeout(config.timeoutMs, REASON);
@@ -161,17 +171,22 @@ export function createMessageHandler({
     ]);
 
     try {
-      await sendModerationAlert(
-        client,
-        message,
-        match,
-        config,
-        moderationChannelId,
-        deleteResult,
-        timeoutResult,
-      );
+      if (moderationChannelId) {
+        await sendModerationAlert(
+          client,
+          message,
+          match,
+          config,
+          moderationChannelId,
+          deleteResult,
+          timeoutResult,
+          locale,
+        );
+      } else {
+        await sendFallbackNotice(message, locale);
+      }
     } catch (error) {
-      console.error("[Moderation] Could not send the alert:", error);
+      console.error("[Moderation] Could not send the notification:", error);
     }
   };
 }

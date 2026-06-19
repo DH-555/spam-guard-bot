@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
 import { loadConfig } from "./config.js";
 import { createMessageHandler } from "./moderation.js";
+import { resolveLocale, t } from "./i18n.js";
 import { OcrService } from "./ocr.js";
 import { SettingsStore } from "./settings-store.js";
 import {
@@ -74,7 +75,7 @@ client.on(Events.InteractionCreate, (interaction) => {
     console.error("[Discord] Failed to process setup command:", error);
 
     const response = {
-      content: "The configuration could not be saved. Check the bot logs.",
+      content: t(resolveLocale(interaction), "setup", "configError"),
       flags: MessageFlags.Ephemeral,
     };
 

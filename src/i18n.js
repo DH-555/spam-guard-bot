@@ -1,0 +1,98 @@
+const STRINGS = {
+  en: {
+    moderation: {
+      alertTitle: "Suspicious image blocked",
+      alertDescription:
+        "Withdrawal and successful-status keywords were detected in an image.",
+      alertContent: (tag) => `Moderation alert: ${tag}`,
+      user: "User",
+      channel: "Channel",
+      message: "Message",
+      imageSource: "Image source",
+      timeout: (minutes) => `Timeout (${minutes} min)`,
+      messageDeleted: "Message deleted",
+      recognizedText: "Recognized text",
+      yes: "Yes",
+      noPrefix: (reason) => `No: ${reason}`,
+      emptyText: "(empty)",
+      timeoutFailure:
+        "The bot cannot apply a timeout because of permissions or role hierarchy.",
+      fallbackNotice: (userMention) =>
+        `Message deleted: ${userMention}. To receive alerts and detailed information, configure a moderation channel with \`/setup moderation-channel\`.`,
+    },
+    setup: {
+      onlyInServer: "This command can only be used inside a server.",
+      manageServerRequired:
+        "You need the Manage Server permission to use this command.",
+      missingBotPermissions:
+        "The bot needs View Channel, Send Messages, and Embed Links permissions in the selected channel.",
+      saved: (channel) => `Moderation alerts will now be sent to ${channel}.`,
+      currentSet: (channelId) =>
+        `The moderation channel is currently set to <#${channelId}>.`,
+      notConfigured:
+        "No moderation channel has been configured. Use `/setup moderation-channel`.",
+      configError: "The configuration could not be saved. Check the bot logs.",
+    },
+  },
+  es: {
+    moderation: {
+      alertTitle: "Se bloqueó una imagen sospechosa",
+      alertDescription:
+        "Se detectaron palabras clave de retirada y estado exitoso en una imagen.",
+      alertContent: (tag) => `Aviso de moderación: ${tag}`,
+      user: "Usuario",
+      channel: "Canal",
+      message: "Mensaje",
+      imageSource: "Origen de la imagen",
+      timeout: (minutes) => `Expulsión temporal (${minutes} min)`,
+      messageDeleted: "Mensaje borrado",
+      recognizedText: "Texto reconocido",
+      yes: "Sí",
+      noPrefix: (reason) => `No: ${reason}`,
+      emptyText: "(vacío)",
+      timeoutFailure:
+        "El bot no puede aplicar una expulsión temporal por permisos o jerarquía de roles.",
+      fallbackNotice: (userMention) =>
+        `Mensaje borrado: ${userMention}. Para recibir alertas e información detallada, configura un canal de moderación con \`/setup moderation-channel\`.`,
+    },
+    setup: {
+      onlyInServer: "Este comando solo puede usarse dentro de un servidor.",
+      manageServerRequired:
+        "Necesitas el permiso Gestionar servidor para usar este comando.",
+      missingBotPermissions:
+        "El bot necesita permisos de Ver canal, Enviar mensajes y Insertar enlaces en el canal seleccionado.",
+      saved: (channel) => `Las alertas de moderación se enviarán a ${channel}.`,
+      currentSet: (channelId) =>
+        `El canal de moderación está configurado actualmente en <#${channelId}>.`,
+      notConfigured:
+        "No se ha configurado ningún canal de moderación. Usa `/setup moderation-channel`.",
+      configError:
+        "No se pudo guardar la configuración. Revisa los registros del bot.",
+    },
+  },
+};
+
+function normalizeLocale(locale) {
+  if (typeof locale !== "string") {
+    return "en";
+  }
+
+  return locale.toLowerCase().startsWith("es") ? "es" : "en";
+}
+
+export function resolveLocale(source) {
+  return normalizeLocale(
+    source?.guildLocale ?? source?.preferredLocale ?? source?.locale,
+  );
+}
+
+export function t(locale, namespace, key, ...args) {
+  const lang = STRINGS[normalizeLocale(locale)] ?? STRINGS.en;
+  const value = lang[namespace]?.[key] ?? STRINGS.en[namespace]?.[key];
+
+  if (typeof value === "function") {
+    return value(...args);
+  }
+
+  return value ?? "";
+}

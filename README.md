@@ -305,8 +305,10 @@ Use `/setup status` to view the currently configured moderation channel. The
 commands require the **Manage Server** permission and their responses are only
 visible to the administrator who runs them.
 
-The bot does not scan images in a server until its moderation channel has been
-configured.
+If a moderation channel has not been configured yet, the bot still scans and
+moderates matching images. In that case, it deletes the message, applies the
+timeout when possible, and posts a short notice in the same channel telling
+admins to configure `/setup moderation-channel` for full alerts and details.
 
 ## Configuration
 
