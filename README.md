@@ -10,6 +10,10 @@ successful-status keyword, the bot:
 
 The bot does not implement or execute bans or kicks.
 
+Invite the bot to your server:
+
+[Discord OAuth2 invite](https://discord.com/oauth2/authorize?client_id=1517463038465282179)
+
 ## Detection rules
 
 The OCR result must contain both of these keyword groups:
