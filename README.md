@@ -260,6 +260,34 @@ For a private GHCR package, `GHCR_PULL_TOKEN` needs permission to read
 packages. If the package is made public, server-side registry authentication
 can be removed from the workflow.
 
+## Legal pages and GitHub Pages
+
+The `docs/` directory contains a static legal site with:
+
+- Privacy Policy: `docs/privacy.html`
+- Terms of Service: `docs/terms.html`
+- Legal landing page: `docs/index.html`
+
+To publish it with GitHub Pages:
+
+1. Open the repository on GitHub.
+2. Go to **Settings > Pages**.
+3. Under **Build and deployment**, select **Deploy from a branch**.
+4. Select the `main` branch and the `/docs` folder.
+5. Save the configuration.
+
+The expected URLs are:
+
+```text
+https://dh-555.github.io/Anti-Mr-Scam-bot/
+https://dh-555.github.io/Anti-Mr-Scam-bot/privacy.html
+https://dh-555.github.io/Anti-Mr-Scam-bot/terms.html
+```
+
+The included policies are project-specific templates, not legal advice. The
+person or organization operating the Bot should review them for the applicable
+jurisdiction and deployment practices.
+
 ## Discord setup
 
 After starting the bot, a server administrator can use Discord's native slash
