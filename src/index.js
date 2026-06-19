@@ -7,6 +7,10 @@ import { resolveLocale, t } from "./i18n.js";
 import { OcrService } from "./ocr.js";
 import { SettingsStore } from "./settings-store.js";
 import {
+  buildVisualReferenceMatcher,
+  loadVisualReferenceManifest,
+} from "./visual-matching.js";
+import {
   createSetupCommandHandler,
   registerSetupCommandForGuild,
   registerSetupCommands,
@@ -16,6 +20,26 @@ const config = loadConfig();
 const ocrService = new OcrService(config.ocrCachePath);
 const settingsStore = new SettingsStore(resolve("data/settings.json"));
 await settingsStore.load();
+
+const visualReferenceHashes = await loadVisualReferenceManifest(
+  config.visualReferenceManifestPath,
+);
+const visualMatcher = visualReferenceHashes.length > 0
+  ? await buildVisualReferenceMatcher(
+      visualReferenceHashes,
+      config.visualMatchThreshold,
+    )
+  : null;
+
+if (visualReferenceHashes.length === 0) {
+  console.warn(
+    `[Visual matching] No reference hashes found at ${config.visualReferenceManifestPath}.`,
+  );
+} else if (visualReferenceHashes.length > 0) {
+  console.log(
+    `[Visual matching] Loaded ${visualReferenceHashes.length} reference hash(es).`,
+  );
+}
 
 const client = new Client({
   intents: [
@@ -29,6 +53,7 @@ const handleMessage = createMessageHandler({
   config,
   ocrService,
   settingsStore,
+  visualMatcher,
 });
 const handleSetupCommand = createSetupCommandHandler({ settingsStore });
 

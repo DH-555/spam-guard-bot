@@ -14,7 +14,7 @@ function resultLabel(result, locale) {
   return t(locale, "moderation", "noPrefix", result.reason instanceof Error ? result.reason.message : String(result.reason));
 }
 
-async function findMatchingImage(message, config, ocrService) {
+async function findMatchingImage(message, config, ocrService, visualMatcher) {
   const imageSources = getMessageImageSources(message);
 
   for (const source of imageSources) {
@@ -31,13 +31,23 @@ async function findMatchingImage(message, config, ocrService) {
         config.maxImageBytes,
         config.imageDownloadTimeoutMs,
       );
+      const visualMatch = visualMatcher ? await visualMatcher.match(image) : null;
+
+      if (visualMatch) {
+        return {
+          source,
+          kind: "visual",
+          visualMatch,
+        };
+      }
+
       const text = await ocrService.recognize(image);
 
       if (containsScamPhrase(text)) {
-        return { source, text };
+        return { source, kind: "ocr", text };
       }
     } catch (error) {
-      console.error(`[OCR] Could not analyze ${source.label}:`, error);
+      console.error(`[Image analysis] Could not analyze ${source.label}:`, error);
     }
   }
 
@@ -63,6 +73,16 @@ async function sendModerationAlert(
   }
 
   const timeoutMinutes = Math.round(config.timeoutMs / 60_000);
+  const detectionMethod =
+    match.kind === "visual"
+      ? t(
+          locale,
+          "moderation",
+          "visualMatch",
+          match.visualMatch.reference.label,
+          match.visualMatch.distance,
+        )
+      : t(locale, "moderation", "ocrMatch");
   const embed = new EmbedBuilder()
     .setColor(0xed4245)
     .setTitle(t(locale, "moderation", "alertTitle"))
@@ -87,6 +107,10 @@ async function sendModerationAlert(
         inline: true,
       },
       {
+        name: t(locale, "moderation", "detectionMethod"),
+        value: detectionMethod,
+      },
+      {
         name: t(locale, "moderation", "timeout", timeoutMinutes),
         value: resultLabel(timeoutResult, locale),
         inline: true,
@@ -98,7 +122,10 @@ async function sendModerationAlert(
       },
       {
         name: t(locale, "moderation", "recognizedText"),
-        value: truncateText(match.text) || t(locale, "moderation", "emptyText"),
+        value:
+          match.kind === "visual"
+            ? t(locale, "moderation", "ocrSkipped")
+            : truncateText(match.text) || t(locale, "moderation", "emptyText"),
       },
     )
     .setThumbnail(message.author.displayAvatarURL())
@@ -131,6 +158,7 @@ export function createMessageHandler({
   config,
   ocrService,
   settingsStore,
+  visualMatcher,
 }) {
   return async function handleMessage(message) {
     if (!message.inGuild() || message.author.bot || message.webhookId) {
@@ -146,7 +174,12 @@ export function createMessageHandler({
     );
     const locale = resolveLocale(message.guild);
 
-    const match = await findMatchingImage(message, config, ocrService);
+    const match = await findMatchingImage(
+      message,
+      config,
+      ocrService,
+      visualMatcher,
+    );
 
     if (!match) {
       return;

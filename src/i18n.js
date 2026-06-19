@@ -12,6 +12,11 @@ const STRINGS = {
       timeout: (minutes) => `Timeout (${minutes} min)`,
       messageDeleted: "Message deleted",
       recognizedText: "Recognized text",
+      detectionMethod: "Detection method",
+      visualMatch: (label, distance) =>
+        `Visual match: ${label} (distance ${distance})`,
+      ocrMatch: "OCR keywords detected",
+      ocrSkipped: "(visual match, OCR skipped)",
       yes: "Yes",
       noPrefix: (reason) => `No: ${reason}`,
       emptyText: "(empty)",
@@ -47,6 +52,11 @@ const STRINGS = {
       timeout: (minutes) => `Expulsión temporal (${minutes} min)`,
       messageDeleted: "Mensaje borrado",
       recognizedText: "Texto reconocido",
+      detectionMethod: "Método de detección",
+      visualMatch: (label, distance) =>
+        `Coincidencia visual: ${label} (distancia ${distance})`,
+      ocrMatch: "Palabras clave detectadas por OCR",
+      ocrSkipped: "(coincidencia visual, OCR omitido)",
       yes: "Sí",
       noPrefix: (reason) => `No: ${reason}`,
       emptyText: "(vacío)",

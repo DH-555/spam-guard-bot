@@ -319,6 +319,19 @@ admins to configure `/setup moderation-channel` for full alerts and details.
 | `MAX_IMAGE_SIZE_MB` | No | `8` |
 | `IMAGE_DOWNLOAD_TIMEOUT_MS` | No | `15000` |
 | `OCR_CACHE_PATH` | No | `tessdata` |
+| `VISUAL_REFERENCE_MANIFEST_PATH` | No | `generated/visual-reference-manifest.json` |
+| `VISUAL_MATCH_THRESHOLD` | No | `6` |
+
+Reference images live in the repository under `visual-references/`. The build
+step hashes them with a perceptual hash and writes the manifest to
+`generated/visual-reference-manifest.json`. At runtime, the bot reads only that
+manifest. Lower thresholds are stricter; `0` means exact hash equality.
+
+To regenerate the manifest locally:
+
+```bash
+pnpm build:visual-references
+```
 
 Discord limits timeouts to a maximum of 28 days.
 
