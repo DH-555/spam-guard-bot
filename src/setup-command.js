@@ -7,7 +7,7 @@ import {
 
 const setupCommand = new SlashCommandBuilder()
   .setName("setup")
-  .setDescription("Configure Anti Mr Scam bot for this server.")
+  .setDescription("Configure D5 spam guard bot for this server.")
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .setDMPermission(false)
   .addSubcommand((subcommand) =>

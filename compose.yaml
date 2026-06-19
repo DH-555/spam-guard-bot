@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: anti-mr-scam-bot:latest
+    image: d5-spam-guard-bot:latest
     restart: unless-stopped
     init: true
     env_file:

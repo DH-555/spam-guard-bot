@@ -1,4 +1,4 @@
-# Anti Mr Scam bot
+# D5 spam guard bot
 
 A Node.js Discord bot that uses OCR and image hashing to analyze attached images and images shown
 in Discord link previews. When an image contains a withdrawal keyword and a
@@ -201,7 +201,7 @@ It performs these steps:
 The published image name is:
 
 ```text
-ghcr.io/dh-555/anti-mr-scam-bot
+ghcr.io/dh-555/d5-spam-guard-bot
 ```
 
 ### Server preparation
@@ -210,9 +210,9 @@ Install Docker Engine and the Docker Compose plugin on the destination server.
 Create the deployment directory and its environment file once:
 
 ```bash
-sudo mkdir -p /opt/anti-mr-scam-bot
-sudo chown "$USER":"$USER" /opt/anti-mr-scam-bot
-cd /opt/anti-mr-scam-bot
+sudo mkdir -p /opt/d5-spam-guard-bot
+sudo chown "$USER":"$USER" /opt/d5-spam-guard-bot
+cd /opt/d5-spam-guard-bot
 nano .env
 ```
 
@@ -235,7 +235,7 @@ Create these variables under **Settings > Secrets and variables > Actions**:
 | Variable | Location | Required | Example |
 | --- | --- | --- | --- |
 | `ENABLE_DEPLOY` | Repository variable | Yes | `true` |
-| `DEPLOY_PATH` | Repository or `production` environment variable | No | `/opt/anti-mr-scam-bot` |
+| `DEPLOY_PATH` | Repository or `production` environment variable | No | `/opt/d5-spam-guard-bot` |
 | `DEPLOY_PORT` | Repository or `production` environment variable | No | `22` |
 
 If `ENABLE_DEPLOY` is not exactly `true`, the workflow still tests and
