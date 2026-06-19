@@ -5,6 +5,7 @@
   "description": "Discord bot that moderates fake successful withdrawal images.",
   "type": "module",
   "main": "src/index.js",
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "start": "node src/index.js",
     "test": "node --test"

@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 const DISCORD_MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000;
 
 function readPositiveNumber(name, fallback) {
@@ -35,6 +37,7 @@ export function loadConfig() {
 
   return {
     discordToken: readRequiredString("DISCORD_TOKEN"),
+    ocrCachePath: resolve(process.env.OCR_CACHE_PATH?.trim() || "tessdata"),
     timeoutMs,
     maxImageBytes: readPositiveNumber("MAX_IMAGE_SIZE_MB", 8) * 1024 * 1024,
     imageDownloadTimeoutMs: readPositiveNumber(

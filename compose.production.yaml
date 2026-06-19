@@ -1,0 +1,23 @@
+services:
+  bot:
+    image: ${BOT_IMAGE:?BOT_IMAGE must be set}
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      OCR_CACHE_PATH: /app/tessdata
+    volumes:
+      - bot-data:/app/data
+      - ocr-cache:/app/tessdata
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  bot-data:
+  ocr-cache:

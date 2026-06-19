@@ -1,8 +1,14 @@
+import { mkdir } from "node:fs/promises";
 import { createWorker } from "tesseract.js";
 
 export class OcrService {
+  #cachePath;
   #workerPromise;
   #queue = Promise.resolve();
+
+  constructor(cachePath) {
+    this.#cachePath = cachePath;
+  }
 
   async recognize(image) {
     const task = this.#queue.then(async () => {
@@ -25,7 +31,11 @@ export class OcrService {
   }
 
   #getWorker() {
-    this.#workerPromise ??= createWorker("eng");
+    this.#workerPromise ??= mkdir(this.#cachePath, { recursive: true }).then(() =>
+      createWorker("eng", undefined, {
+        cachePath: this.#cachePath,
+      }),
+    );
     return this.#workerPromise;
   }
 }

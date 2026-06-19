@@ -127,6 +127,139 @@ pnpm start
 The first OCR run may download the English language data and take longer.
 The worker is reused for subsequent images.
 
+## Docker
+
+The included image uses `node:22-alpine`, installs production dependencies
+only, and runs the bot as the non-root `node` user.
+
+Create the environment file before starting the container:
+
+```bash
+cp .env.example .env
+```
+
+Set `DISCORD_TOKEN` in `.env`, then build and start the bot:
+
+```bash
+docker compose up -d --build
+```
+
+View its logs:
+
+```bash
+docker compose logs -f bot
+```
+
+Stop the bot:
+
+```bash
+docker compose down
+```
+
+The Compose configuration creates two named volumes:
+
+- `bot-data` stores the per-server moderation channel configuration.
+- `ocr-cache` stores the downloaded Tesseract English language data.
+
+Both volumes survive container recreation and image upgrades. Running
+`docker compose down -v` deletes them, including the saved moderation channel
+configuration.
+
+### Ports
+
+No ports need to be exposed or published. The bot connects outward to the
+Discord Gateway over HTTPS and WebSocket connections. It does not run an HTTP
+server or accept inbound network traffic.
+
+The relevant Compose configuration intentionally contains no `ports` section:
+
+```yaml
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - bot-data:/app/data
+      - ocr-cache:/app/tessdata
+```
+
+## Automatic deployment with GitHub Actions
+
+The workflow in `.github/workflows/deploy.yml` runs on every push to `main`
+and can also be started manually.
+
+It performs these steps:
+
+1. Installs dependencies and runs the test suite.
+2. Builds the Docker image.
+3. Publishes `latest` and commit-specific tags to GitHub Container Registry.
+4. Optionally connects to a server over SSH, pulls the exact commit image, and
+   restarts the bot with Docker Compose.
+
+The published image name is:
+
+```text
+ghcr.io/dh-555/anti-mr-scam-bot
+```
+
+### Server preparation
+
+Install Docker Engine and the Docker Compose plugin on the destination server.
+Create the deployment directory and its environment file once:
+
+```bash
+sudo mkdir -p /opt/anti-mr-scam-bot
+sudo chown "$USER":"$USER" /opt/anti-mr-scam-bot
+cd /opt/anti-mr-scam-bot
+nano .env
+```
+
+The server-side `.env` must contain at least:
+
+```env
+DISCORD_TOKEN=your_real_bot_token
+```
+
+GitHub Actions deliberately does not overwrite this file.
+
+The SSH user must be able to run `docker` and `docker compose` without an
+interactive password prompt. No inbound application ports are required; only
+SSH access is needed for deployment.
+
+### GitHub Actions variables
+
+Create these variables under **Settings > Secrets and variables > Actions**:
+
+| Variable | Location | Required | Example |
+| --- | --- | --- | --- |
+| `ENABLE_DEPLOY` | Repository variable | Yes | `true` |
+| `DEPLOY_PATH` | Repository or `production` environment variable | No | `/opt/anti-mr-scam-bot` |
+| `DEPLOY_PORT` | Repository or `production` environment variable | No | `22` |
+
+If `ENABLE_DEPLOY` is not exactly `true`, the workflow still tests and
+publishes the image but skips the SSH deployment.
+
+### GitHub Actions secrets
+
+Create these secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `DEPLOY_HOST` | Server hostname or IP address. |
+| `DEPLOY_USER` | SSH username. |
+| `DEPLOY_SSH_KEY` | Private SSH key used only for deployment. |
+| `GHCR_USERNAME` | GitHub username used by the server to pull the image. |
+| `GHCR_PULL_TOKEN` | Personal access token (classic) with `read:packages`. |
+
+The corresponding public SSH key must be added to
+`~/.ssh/authorized_keys` for `DEPLOY_USER`.
+
+For a private GHCR package, `GHCR_PULL_TOKEN` needs permission to read
+packages. If the package is made public, server-side registry authentication
+can be removed from the workflow.
+
 ## Discord setup
 
 After starting the bot, a server administrator can use Discord's native slash
@@ -155,6 +288,7 @@ configured.
 | `TIMEOUT_MINUTES` | No | `1440` (24 hours) |
 | `MAX_IMAGE_SIZE_MB` | No | `8` |
 | `IMAGE_DOWNLOAD_TIMEOUT_MS` | No | `15000` |
+| `OCR_CACHE_PATH` | No | `tessdata` |
 
 Discord limits timeouts to a maximum of 28 days.
 
