@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { DEFAULT_OCR_EFFORT, normalizeOcrEffort } from "./ocr.js";
 
 const DISCORD_MAX_TIMEOUT_MS = 28 * 24 * 60 * 60 * 1000;
 
@@ -82,5 +83,6 @@ export function loadConfig() {
     ),
     visualMatchThreshold: readNonNegativeInteger("VISUAL_MATCH_THRESHOLD", 6),
     maxImagePixels: readPositiveInteger("MAX_IMAGE_PIXELS", 16_000_000),
+    ocrEffort: normalizeOcrEffort(process.env.OCR_EFFORT || DEFAULT_OCR_EFFORT),
   };
 }

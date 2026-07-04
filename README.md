@@ -34,6 +34,8 @@ You can tune the detection sensitivity per server with `/setup paranoia`:
 - `medium` - visual hash match or OCR text containing `Withdrawal`, `Succeeded`, and `USDT`.
 - `high` - visual hash match or OCR text containing `Withdrawal` and either `Succeeded` or `USDT`.
 
+The default paranoia level is `high`.
+
 Server admins can also:
 
 - Set a custom timeout with `/setup timeout`.
@@ -346,8 +348,13 @@ admins to configure `/setup moderation-channel` for full alerts and details.
 | `MAX_IMAGE_PIXELS` | No | `16000000` |
 | `IMAGE_DOWNLOAD_TIMEOUT_MS` | No | `15000` |
 | `OCR_CACHE_PATH` | No | `tessdata` |
+| `OCR_EFFORT` | No | `high` |
 | `VISUAL_REFERENCE_MANIFEST_PATH` | No | `generated/visual-reference-manifest.json` |
 | `VISUAL_MATCH_THRESHOLD` | No | `6` |
+
+`OCR_EFFORT` can be `low`, `medium`, or `high`. Higher effort tries more
+preprocessing passes and crops, which improves blurry screen photos at the cost
+of slower OCR.
 
 Reference images live in the repository under `visual-references/`. The build
 step hashes them with a perceptual hash and writes the manifest to
@@ -363,7 +370,7 @@ pnpm build:visual-references
 With the current reference folder, startup logs should include:
 
 ```text
-[Visual matching] Loaded 8 reference hash(es).
+[Visual matching] Loaded 19 reference hash(es).
 ```
 
 Discord limits timeouts to a maximum of 28 days.

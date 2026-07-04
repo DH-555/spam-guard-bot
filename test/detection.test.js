@@ -2,13 +2,21 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   containsScamPhrase,
+  DEFAULT_PARANOIA_LEVEL,
   PARANOIA_LEVELS,
   normalizeOcrText,
+  normalizeParanoiaLevel,
   truncateText,
 } from "../src/detection.js";
 
 test("detects Withdrawal and Success regardless of case or line breaks", () => {
   assert.equal(containsScamPhrase("Withdrawal\nSUCCESS"), true);
+});
+
+test("defaults paranoia to high", () => {
+  assert.equal(DEFAULT_PARANOIA_LEVEL, PARANOIA_LEVELS.HIGH);
+  assert.equal(normalizeParanoiaLevel(), PARANOIA_LEVELS.HIGH);
+  assert.equal(normalizeParanoiaLevel("invalid"), PARANOIA_LEVELS.HIGH);
 });
 
 test("detects the words when they appear in reverse order", () => {

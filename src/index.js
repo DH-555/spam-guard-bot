@@ -17,7 +17,9 @@ import {
 } from "./setup-command.js";
 
 const config = loadConfig();
-const ocrService = new OcrService(config.ocrCachePath);
+const ocrService = new OcrService(config.ocrCachePath, {
+  effort: config.ocrEffort,
+});
 const settingsStore = new SettingsStore(resolve("data/settings.json"));
 await settingsStore.load();
 

@@ -8,6 +8,7 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build:visual-references": "node scripts/build-visual-reference-manifest.mjs",
+    "prestart": "pnpm build:visual-references",
     "start": "node src/index.js",
     "test": "node --test"
   },

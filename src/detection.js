@@ -7,9 +7,11 @@ export const PARANOIA_LEVELS = Object.freeze({
   HIGH: "high",
 });
 
+export const DEFAULT_PARANOIA_LEVEL = PARANOIA_LEVELS.HIGH;
+
 export function normalizeParanoiaLevel(level) {
   if (typeof level !== "string") {
-    return PARANOIA_LEVELS.HIGH;
+    return DEFAULT_PARANOIA_LEVEL;
   }
 
   const normalized = level.trim().toLowerCase();
@@ -26,7 +28,7 @@ export function normalizeParanoiaLevel(level) {
     return PARANOIA_LEVELS.HIGH;
   }
 
-  return PARANOIA_LEVELS.HIGH;
+  return DEFAULT_PARANOIA_LEVEL;
 }
 
 function containsWholeWord(text, word) {
@@ -40,7 +42,7 @@ export function normalizeOcrText(text) {
     .toUpperCase();
 }
 
-export function containsScamPhrase(text, paranoiaLevel = PARANOIA_LEVELS.HIGH) {
+export function containsScamPhrase(text, paranoiaLevel = DEFAULT_PARANOIA_LEVEL) {
   const normalizedLevel = normalizeParanoiaLevel(paranoiaLevel);
 
   if (normalizedLevel === PARANOIA_LEVELS.LOW) {

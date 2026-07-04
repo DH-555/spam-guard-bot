@@ -69,7 +69,10 @@ async function findMatchingImage(
 
       if (paranoiaLevel !== PARANOIA_LEVELS.LOW) {
         const ocrStartedAt = performance.now();
-        const text = await ocrService.recognize(image);
+        const text = await ocrService.recognize(image, {
+          shouldStop: (recognizedText) =>
+            containsScamPhrase(recognizedText, paranoiaLevel),
+        });
         const ocrMs = performance.now() - ocrStartedAt;
         console.log(
           `[Image analysis] ${source.label}: no visual match ` +
