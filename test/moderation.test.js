@@ -29,14 +29,15 @@ function createHorizontalGradient(width, height, reversed = false) {
     .toBuffer();
 }
 
-test("moderates and posts a fallback notice when no moderation channel is configured", async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => ({
+function createImageFetchResponse(buffer) {
+  return {
     ok: true,
     status: 200,
     headers: {
       get(name) {
-        return name.toLowerCase() === "content-length" ? "4" : null;
+        return name.toLowerCase() === "content-length"
+          ? String(buffer.length)
+          : null;
       },
     },
     body: {
@@ -49,13 +50,23 @@ test("moderates and posts a fallback notice when no moderation channel is config
             }
 
             done = true;
-            return { done: false, value: new Uint8Array([1, 2, 3, 4]) };
+            return { done: false, value: buffer };
           },
           async cancel() {},
         };
       },
     },
-  });
+  };
+}
+
+function imageUrl(name) {
+  return `https://cdn.discordapp.com/attachments/${name}.png`;
+}
+
+test("moderates and posts a fallback notice when no moderation channel is configured", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
 
   try {
     const channelMessages = [];
@@ -79,6 +90,7 @@ test("moderates and posts a fallback notice when no moderation channel is config
       },
       guild: {
         preferredLocale: "es-ES",
+        ownerId: "owner-1",
       },
       attachments: new Map([
         [
@@ -87,8 +99,8 @@ test("moderates and posts a fallback notice when no moderation channel is config
             id: "attachment-1",
             name: "proof.png",
             contentType: "image/png",
-            size: 4,
-            url: "https://example.com/proof.png",
+            size: imageBuffer.length,
+            url: imageUrl("proof"),
           },
         ],
       ]),
@@ -96,6 +108,9 @@ test("moderates and posts a fallback notice when no moderation channel is config
       messageSnapshots: new Map(),
       member: {
         moderatable: true,
+        permissions: {
+          has: () => false,
+        },
         timeout: async () => {},
       },
       delete: async () => {},
@@ -107,6 +122,7 @@ test("moderates and posts a fallback notice when no moderation channel is config
       client: {},
       config: {
         maxImageBytes: 1024,
+        maxImagePixels: 16_000_000,
         imageDownloadTimeoutMs: 1000,
         timeoutMs: 60_000,
       },
@@ -115,6 +131,9 @@ test("moderates and posts a fallback notice when no moderation channel is config
       },
       settingsStore: {
         getModerationChannelId: () => null,
+        getParanoiaLevel: () => "high",
+        getExcludedRoleIds: () => [],
+        getTimeoutMs: () => null,
       },
     });
 
@@ -148,33 +167,7 @@ test("deletes the whole message when only one image matches", async () => {
   globalThis.fetch = async (url) => {
     const buffer = url.includes("matching") ? matchingBuffer : safeBuffer;
 
-    return {
-      ok: true,
-      status: 200,
-      headers: {
-        get(name) {
-          return name.toLowerCase() === "content-length"
-            ? String(buffer.length)
-            : null;
-        },
-      },
-      body: {
-        getReader() {
-          let done = false;
-          return {
-            async read() {
-              if (done) {
-                return { done: true, value: undefined };
-              }
-
-              done = true;
-              return { done: false, value: buffer };
-            },
-            async cancel() {},
-          };
-        },
-      },
-    };
+    return createImageFetchResponse(buffer);
   };
 
   try {
@@ -206,6 +199,7 @@ test("deletes the whole message when only one image matches", async () => {
       },
       guild: {
         preferredLocale: "en-US",
+        ownerId: "owner-1",
       },
       attachments: new Map([
         [
@@ -214,8 +208,8 @@ test("deletes the whole message when only one image matches", async () => {
             id: "attachment-1",
             name: "safe.png",
             contentType: "image/png",
-            size: 4,
-            url: "https://example.com/safe.png",
+            size: safeBuffer.length,
+            url: imageUrl("safe"),
           },
         ],
         [
@@ -224,8 +218,8 @@ test("deletes the whole message when only one image matches", async () => {
             id: "attachment-2",
             name: "matching.png",
             contentType: "image/png",
-            size: 4,
-            url: "https://example.com/matching.png",
+            size: matchingBuffer.length,
+            url: imageUrl("matching"),
           },
         ],
       ]),
@@ -233,6 +227,9 @@ test("deletes the whole message when only one image matches", async () => {
       messageSnapshots: new Map(),
       member: {
         moderatable: true,
+        permissions: {
+          has: () => false,
+        },
         timeout: async () => {},
       },
       delete: async () => {
@@ -246,6 +243,7 @@ test("deletes the whole message when only one image matches", async () => {
       client: {},
       config: {
         maxImageBytes: 1024,
+        maxImagePixels: 16_000_000,
         imageDownloadTimeoutMs: 1000,
         timeoutMs: 60_000,
       },
@@ -257,6 +255,9 @@ test("deletes the whole message when only one image matches", async () => {
       },
       settingsStore: {
         getModerationChannelId: () => null,
+        getParanoiaLevel: () => "high",
+        getExcludedRoleIds: () => [],
+        getTimeoutMs: () => null,
       },
       visualMatcher,
     });
@@ -267,6 +268,274 @@ test("deletes the whole message when only one image matches", async () => {
     assert.equal(ocrCalls, 1);
     assert.equal(channelMessages.length, 1);
     assert.match(channelMessages[0].content, /Message deleted: <@user-1>/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("ignores guild administrators", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
+
+  try {
+    let deleted = 0;
+    let ocrCalls = 0;
+    const channelMessages = [];
+    const message = {
+      id: "message-admin",
+      guildId: "guild-1",
+      channelId: "channel-1",
+      author: {
+        id: "user-admin",
+        tag: "admin#0001",
+        bot: false,
+        displayAvatarURL: () => "https://example.com/avatar.png",
+        toString: () => "<@user-admin>",
+      },
+      channel: {
+        isTextBased: () => true,
+        isSendable: () => true,
+        send: async (payload) => {
+          channelMessages.push(payload);
+        },
+      },
+      guild: {
+        preferredLocale: "en-US",
+        ownerId: "owner-1",
+        members: {
+          fetch: async () => {
+            throw new Error("should not fetch");
+          },
+        },
+      },
+      attachments: new Map([
+        [
+          "attachment-1",
+          {
+            id: "attachment-1",
+            name: "proof.png",
+            contentType: "image/png",
+            size: imageBuffer.length,
+            url: imageUrl("proof"),
+          },
+        ],
+      ]),
+      embeds: [],
+      messageSnapshots: new Map(),
+      member: {
+        moderatable: true,
+        permissions: {
+          has: () => true,
+        },
+        timeout: async () => {},
+      },
+      delete: async () => {
+        deleted += 1;
+      },
+      webhookId: null,
+      inGuild: () => true,
+    };
+
+    const handleMessage = createMessageHandler({
+      client: {},
+      config: {
+        maxImageBytes: 1024,
+        maxImagePixels: 16_000_000,
+        imageDownloadTimeoutMs: 1000,
+        timeoutMs: 60_000,
+      },
+      ocrService: {
+        recognize: async () => {
+          ocrCalls += 1;
+          return "Withdrawal\nSucceeded";
+        },
+      },
+      settingsStore: {
+        getModerationChannelId: () => null,
+        getParanoiaLevel: () => "high",
+        getExcludedRoleIds: () => [],
+        getTimeoutMs: () => null,
+      },
+    });
+
+    await handleMessage(message);
+
+    assert.equal(deleted, 0);
+    assert.equal(ocrCalls, 0);
+    assert.equal(channelMessages.length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("ignores members with excluded roles", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
+
+  try {
+    let deleted = 0;
+    let ocrCalls = 0;
+    const message = {
+      id: "message-role-excluded",
+      guildId: "guild-1",
+      channelId: "channel-1",
+      author: {
+        id: "user-role",
+        tag: "role#0001",
+        bot: false,
+        displayAvatarURL: () => "https://example.com/avatar.png",
+        toString: () => "<@user-role>",
+      },
+      channel: {
+        isTextBased: () => true,
+        isSendable: () => true,
+        send: async () => {},
+      },
+      guild: {
+        preferredLocale: "en-US",
+        ownerId: "owner-1",
+      },
+      attachments: new Map([
+        [
+          "attachment-1",
+          {
+            id: "attachment-1",
+            name: "proof.png",
+            contentType: "image/png",
+            size: imageBuffer.length,
+            url: imageUrl("proof"),
+          },
+        ],
+      ]),
+      embeds: [],
+      messageSnapshots: new Map(),
+      member: {
+        moderatable: true,
+        permissions: {
+          has: () => false,
+        },
+        roles: {
+          cache: new Map([["role-1", { id: "role-1" }]]),
+        },
+        timeout: async () => {},
+      },
+      delete: async () => {
+        deleted += 1;
+      },
+      webhookId: null,
+      inGuild: () => true,
+    };
+
+    const handleMessage = createMessageHandler({
+      client: {},
+      config: {
+        maxImageBytes: 1024,
+        maxImagePixels: 16_000_000,
+        imageDownloadTimeoutMs: 1000,
+        timeoutMs: 60_000,
+      },
+      ocrService: {
+        recognize: async () => {
+          ocrCalls += 1;
+          return "Withdrawal\nSucceeded";
+        },
+      },
+      settingsStore: {
+        getModerationChannelId: () => null,
+        getParanoiaLevel: () => "high",
+        getExcludedRoleIds: () => ["role-1"],
+        getTimeoutMs: () => null,
+      },
+    });
+
+    await handleMessage(message);
+
+    assert.equal(deleted, 0);
+    assert.equal(ocrCalls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("uses the server timeout setting when timing out a user", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
+
+  try {
+    let timeoutMs = null;
+    const message = {
+      id: "message-timeout",
+      guildId: "guild-1",
+      channelId: "channel-1",
+      author: {
+        id: "user-timeout",
+        tag: "timeout#0001",
+        bot: false,
+        displayAvatarURL: () => "https://example.com/avatar.png",
+        toString: () => "<@user-timeout>",
+      },
+      channel: {
+        isTextBased: () => true,
+        isSendable: () => true,
+        send: async () => {},
+      },
+      guild: {
+        preferredLocale: "en-US",
+        ownerId: "owner-1",
+      },
+      attachments: new Map([
+        [
+          "attachment-1",
+          {
+            id: "attachment-1",
+            name: "proof.png",
+            contentType: "image/png",
+            size: imageBuffer.length,
+            url: imageUrl("proof"),
+          },
+        ],
+      ]),
+      embeds: [],
+      messageSnapshots: new Map(),
+      member: {
+        moderatable: true,
+        permissions: {
+          has: () => false,
+        },
+        timeout: async (value) => {
+          timeoutMs = value;
+        },
+      },
+      delete: async () => {},
+      webhookId: null,
+      inGuild: () => true,
+    };
+
+    const handleMessage = createMessageHandler({
+      client: {},
+      config: {
+        maxImageBytes: 1024,
+        maxImagePixels: 16_000_000,
+        imageDownloadTimeoutMs: 1000,
+        timeoutMs: 60_000,
+      },
+      ocrService: {
+        recognize: async () => "Withdrawal\nSucceeded",
+      },
+      settingsStore: {
+        getModerationChannelId: () => null,
+        getParanoiaLevel: () => "high",
+        getExcludedRoleIds: () => [],
+        getTimeoutMs: () => 15 * 60_000,
+      },
+    });
+
+    await handleMessage(message);
+
+    assert.equal(timeoutMs, 15 * 60_000);
   } finally {
     globalThis.fetch = originalFetch;
   }

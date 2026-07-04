@@ -2,7 +2,7 @@
 
 A Node.js Discord bot that uses OCR and image hashing to analyze attached images and images shown
 in Discord link previews. When an image contains a withdrawal keyword and a
-successful-status keyword, the bot:
+payout keyword, the bot:
 
 1. Deletes the message.
 2. Applies a timeout to the author.
@@ -19,7 +19,7 @@ Invite the bot to your server:
 The OCR result must contain both of these keyword groups:
 
 - Withdrawal group: `Withdrawal`.
-- Successful-status group: `Success`, `Succeeded`, or `Successful`.
+- Payout group: `Success`, `Succeeded`, `Successful`, `Successfully`, or `USDT` in uppercase.
 
 The keywords:
 
@@ -27,6 +27,17 @@ The keywords:
 - Can appear in any order.
 - Can appear on different lines or far apart in the image.
 - Must appear as complete words.
+
+You can tune the detection sensitivity per server with `/setup paranoia`:
+
+- `low` - exact visual hash match only.
+- `medium` - visual hash match or OCR text containing `Withdrawal`, `Succeeded`, and `USDT`.
+- `high` - visual hash match or OCR text containing `Withdrawal` and either `Succeeded` or `USDT`.
+
+Server admins can also:
+
+- Set a custom timeout with `/setup timeout`.
+- Exclude roles from detection with `/setup excluded-role add`, `/setup excluded-role remove`, and `/setup excluded-role list`.
 
 For example, an image containing `Withdrawal` near the top and `Succeeded`
 near the bottom is considered a match.
@@ -39,7 +50,7 @@ The bot scans:
 - Every image in a multi-image message.
 
 Each image is evaluated independently. If any single image contains a matching
-withdrawal keyword and successful-status keyword, the entire outer message is
+withdrawal keyword and payout keyword, the entire outer message is
 deleted and the user who sent or forwarded it is timed out when Discord allows
 it.
 
@@ -95,15 +106,16 @@ If the bot cannot apply a timeout because of role hierarchy or permissions, it
 still attempts to delete the message and records the timeout failure in the
 moderation alert.
 
-Messages from administrators are still scanned. When an administrator sends a
-matching image, the bot attempts to delete the message and always sends the
-moderation alert. Discord does not allow the timeout itself to be applied to an
-administrator, so the alert records that timeout as failed.
+Messages from server administrators are ignored completely. The bot does not
+scan them, delete them, or time them out.
+
+Members with an excluded role are also ignored completely.
 
 ### Administrator permissions
 
-The person running `/setup moderation-channel` or `/setup status` must have
-the **Manage Server** permission. The bot itself does not need Manage Server.
+The person running `/setup moderation-channel`, `/setup paranoia`, or
+`/setup status` must have the **Manage Server** permission. The bot itself
+does not need Manage Server.
 
 ### Gateway intent
 
@@ -130,6 +142,16 @@ pnpm start
 
 The first OCR run may download the English language data and take longer.
 The worker is reused for subsequent images.
+
+### Server configuration
+
+Server administrators with **Manage Server** can configure the bot with:
+
+- `/setup moderation-channel` to choose where alerts are sent.
+- `/setup paranoia` to set the per-server detection sensitivity.
+- `/setup timeout` to set the per-server timeout.
+- `/setup excluded-role ...` to manage ignored roles.
+- `/setup status` to review the current configuration.
 
 ## Docker
 
@@ -321,6 +343,7 @@ admins to configure `/setup moderation-channel` for full alerts and details.
 | `DISCORD_TOKEN` | Yes | — |
 | `TIMEOUT_MINUTES` | No | `1440` (24 hours) |
 | `MAX_IMAGE_SIZE_MB` | No | `8` |
+| `MAX_IMAGE_PIXELS` | No | `16000000` |
 | `IMAGE_DOWNLOAD_TIMEOUT_MS` | No | `15000` |
 | `OCR_CACHE_PATH` | No | `tessdata` |
 | `VISUAL_REFERENCE_MANIFEST_PATH` | No | `generated/visual-reference-manifest.json` |

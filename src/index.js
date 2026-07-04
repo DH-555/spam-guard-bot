@@ -28,6 +28,7 @@ const visualMatcher = visualReferenceHashes.length > 0
   ? await buildVisualReferenceMatcher(
       visualReferenceHashes,
       config.visualMatchThreshold,
+      { maxImagePixels: config.maxImagePixels },
     )
   : null;
 
@@ -55,7 +56,7 @@ const handleMessage = createMessageHandler({
   settingsStore,
   visualMatcher,
 });
-const handleSetupCommand = createSetupCommandHandler({ settingsStore });
+const handleSetupCommand = createSetupCommandHandler({ settingsStore, config });
 
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Bot connected as ${readyClient.user.tag}.`);

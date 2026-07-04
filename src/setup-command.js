@@ -4,6 +4,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from "discord.js";
+import { PARANOIA_LEVELS, normalizeParanoiaLevel } from "./detection.js";
 import { resolveLocale, t } from "./i18n.js";
 
 const setupCommand = new SlashCommandBuilder()
@@ -25,9 +26,93 @@ const setupCommand = new SlashCommandBuilder()
   )
   .addSubcommand((subcommand) =>
     subcommand
+      .setName("paranoia")
+      .setDescription("Set the detection sensitivity for this server.")
+      .addStringOption((option) =>
+        option
+          .setName("level")
+          .setDescription("The paranoia level to use.")
+          .setRequired(true)
+          .addChoices(
+            { name: "low", value: PARANOIA_LEVELS.LOW },
+            { name: "medium", value: PARANOIA_LEVELS.MEDIUM },
+            { name: "high", value: PARANOIA_LEVELS.HIGH },
+          ),
+      ),
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("timeout")
+      .setDescription("Set the timeout duration for this server.")
+      .addIntegerOption((option) =>
+        option
+          .setName("minutes")
+          .setDescription("The timeout duration in minutes.")
+          .setMinValue(1)
+          .setMaxValue(40320)
+          .setRequired(true),
+      ),
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName("excluded-role")
+      .setDescription("Manage roles that are ignored by detection.")
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("add")
+          .setDescription("Exclude a role from detection.")
+          .addRoleOption((option) =>
+            option
+              .setName("role")
+              .setDescription("The role to exclude from detection.")
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("remove")
+          .setDescription("Allow a previously excluded role again.")
+          .addRoleOption((option) =>
+            option
+              .setName("role")
+              .setDescription("The role to remove from the exclusion list.")
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((subcommand) =>
+        subcommand.setName("list").setDescription("Show excluded roles."),
+      ),
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
       .setName("status")
       .setDescription("Show the current configuration for this server."),
   );
+
+function formatParanoiaLevel(locale, level) {
+  switch (normalizeParanoiaLevel(level)) {
+    case PARANOIA_LEVELS.LOW:
+      return t(locale, "setup", "paranoiaLow");
+    case PARANOIA_LEVELS.MEDIUM:
+      return t(locale, "setup", "paranoiaMedium");
+    default:
+      return t(locale, "setup", "paranoiaHigh");
+  }
+}
+
+function formatTimeoutMinutes(timeoutMs) {
+  return Math.max(1, Math.round(timeoutMs / 60_000));
+}
+
+function formatExcludedRoles(interaction, roleIds) {
+  if (roleIds.length === 0) {
+    return t(resolveLocale(interaction), "setup", "noExcludedRoles");
+  }
+
+  return roleIds
+    .map((roleId) => interaction.guild.roles.cache.get(roleId)?.toString() ?? `<@&${roleId}>`)
+    .join(", ");
+}
 
 export async function registerSetupCommands(client) {
   await Promise.all(
@@ -39,7 +124,7 @@ export async function registerSetupCommandForGuild(guild) {
   await guild.commands.set([setupCommand.toJSON()]);
 }
 
-export function createSetupCommandHandler({ settingsStore }) {
+export function createSetupCommandHandler({ settingsStore, config }) {
   return async function handleSetupCommand(interaction) {
     if (
       !interaction.isChatInputCommand() ||
@@ -66,6 +151,7 @@ export function createSetupCommandHandler({ settingsStore }) {
 
     const locale = resolveLocale(interaction);
 
+    const subcommandGroup = interaction.options.getSubcommandGroup(false);
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === "moderation-channel") {
@@ -102,11 +188,73 @@ export function createSetupCommandHandler({ settingsStore }) {
       return;
     }
 
+    if (subcommand === "paranoia") {
+      const level = interaction.options.getString("level", true);
+      await settingsStore.setParanoiaLevel(interaction.guildId, level);
+      await interaction.reply({
+        content: t(locale, "setup", "paranoiaSaved", formatParanoiaLevel(locale, level)),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (subcommand === "timeout") {
+      const minutes = interaction.options.getInteger("minutes", true);
+      await settingsStore.setTimeoutMs(interaction.guildId, minutes * 60_000);
+      await interaction.reply({
+        content: t(locale, "setup", "timeoutSaved", minutes),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (subcommandGroup === "excluded-role") {
+      const role = interaction.options.getRole("role", subcommand !== "list");
+
+      if (subcommand === "add" && role) {
+        await settingsStore.addExcludedRoleId(interaction.guildId, role.id);
+        await interaction.reply({
+          content: t(locale, "setup", "excludedRoleAdded", role),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (subcommand === "remove" && role) {
+        await settingsStore.removeExcludedRoleId(interaction.guildId, role.id);
+        await interaction.reply({
+          content: t(locale, "setup", "excludedRoleRemoved", role),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const excludedRoleIds = settingsStore.getExcludedRoleIds(interaction.guildId);
+      await interaction.reply({
+        content: t(
+          locale,
+          "setup",
+          "excludedRolesList",
+          formatExcludedRoles(interaction, excludedRoleIds),
+        ),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     const channelId = settingsStore.getModerationChannelId(interaction.guildId);
+    const paranoiaLevel = settingsStore.getParanoiaLevel(interaction.guildId);
+    const timeoutMs = settingsStore.getTimeoutMs(interaction.guildId) ?? config.timeoutMs;
+    const excludedRoleIds = settingsStore.getExcludedRoleIds(interaction.guildId);
     await interaction.reply({
-      content: channelId
-        ? t(locale, "setup", "currentSet", channelId)
-        : t(locale, "setup", "notConfigured"),
+      content: [
+        channelId
+          ? t(locale, "setup", "currentSet", channelId)
+          : t(locale, "setup", "notConfigured"),
+        t(locale, "setup", "currentParanoia", formatParanoiaLevel(locale, paranoiaLevel)),
+        t(locale, "setup", "currentTimeout", formatTimeoutMinutes(timeoutMs)),
+        t(locale, "setup", "currentExcludedRoles", formatExcludedRoles(interaction, excludedRoleIds)),
+      ].join("\n"),
       flags: MessageFlags.Ephemeral,
     });
   };

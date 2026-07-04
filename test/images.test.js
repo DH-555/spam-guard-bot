@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getMessageImageSources } from "../src/images.js";
+import sharp from "sharp";
+import {
+  assertSafeImageDimensions,
+  getMessageImageSources,
+  isTrustedImageUrl,
+} from "../src/images.js";
 
 test("extracts image attachments", () => {
   const message = {
@@ -12,7 +17,7 @@ test("extracts image attachments", () => {
           name: "proof.png",
           contentType: "image/png",
           size: 1234,
-          url: "https://cdn.example/proof.png",
+          url: "https://cdn.discordapp.com/attachments/proof.png",
         },
       ],
     ]),
@@ -21,7 +26,7 @@ test("extracts image attachments", () => {
 
   assert.deepEqual(getMessageImageSources(message), [
     {
-      url: "https://cdn.example/proof.png",
+      url: "https://cdn.discordapp.com/attachments/proof.png",
       label: "proof.png",
       size: 1234,
       forwarded: false,
@@ -70,9 +75,11 @@ test("deduplicates repeated image URLs", () => {
       {
         image: {
           url: "https://example.com/image.png",
+          proxyURL: "https://media.discordapp.net/image.png",
         },
         thumbnail: {
           url: "https://example.com/image.png",
+          proxyURL: "https://media.discordapp.net/image.png",
         },
       },
     ],
@@ -91,7 +98,7 @@ test("extracts all images from forwarded message snapshots", () => {
           name: "first.png",
           contentType: "image/png",
           size: 100,
-          url: "https://cdn.example/first.png",
+          url: "https://cdn.discordapp.com/attachments/first.png",
         },
       ],
       [
@@ -101,7 +108,7 @@ test("extracts all images from forwarded message snapshots", () => {
           name: "second.png",
           contentType: "image/png",
           size: 200,
-          url: "https://cdn.example/second.png",
+          url: "https://cdn.discordapp.com/attachments/second.png",
         },
       ],
     ]),
@@ -109,6 +116,7 @@ test("extracts all images from forwarded message snapshots", () => {
       {
         image: {
           url: "https://example.com/forwarded-embed.png",
+          proxyURL: "https://images-ext-1.discordapp.net/external/forwarded-embed.png",
         },
       },
     ],
@@ -122,19 +130,19 @@ test("extracts all images from forwarded message snapshots", () => {
 
   assert.deepEqual(getMessageImageSources(message), [
     {
-      url: "https://cdn.example/first.png",
+      url: "https://cdn.discordapp.com/attachments/first.png",
       label: "Forwarded: first.png",
       size: 100,
       forwarded: true,
     },
     {
-      url: "https://cdn.example/second.png",
+      url: "https://cdn.discordapp.com/attachments/second.png",
       label: "Forwarded: second.png",
       size: 200,
       forwarded: true,
     },
     {
-      url: "https://example.com/forwarded-embed.png",
+      url: "https://images-ext-1.discordapp.net/external/forwarded-embed.png",
       label: "Forwarded: https://example.com/forwarded-embed.png",
       size: null,
       forwarded: true,
@@ -152,7 +160,7 @@ test("extracts every image from a multi-image message", () => {
           name: "safe.png",
           contentType: "image/png",
           size: 100,
-          url: "https://cdn.example/safe.png",
+          url: "https://cdn.discordapp.com/attachments/safe.png",
         },
       ],
       [
@@ -162,7 +170,7 @@ test("extracts every image from a multi-image message", () => {
           name: "matching.png",
           contentType: "image/png",
           size: 200,
-          url: "https://cdn.example/matching.png",
+          url: "https://cdn.discordapp.com/attachments/matching.png",
         },
       ],
       [
@@ -172,7 +180,7 @@ test("extracts every image from a multi-image message", () => {
           name: "other.png",
           contentType: "image/png",
           size: 300,
-          url: "https://cdn.example/other.png",
+          url: "https://cdn.discordapp.com/attachments/other.png",
         },
       ],
     ]),
@@ -183,9 +191,70 @@ test("extracts every image from a multi-image message", () => {
   assert.deepEqual(
     getMessageImageSources(message).map((source) => source.url),
     [
-      "https://cdn.example/safe.png",
-      "https://cdn.example/matching.png",
-      "https://cdn.example/other.png",
+      "https://cdn.discordapp.com/attachments/safe.png",
+      "https://cdn.discordapp.com/attachments/matching.png",
+      "https://cdn.discordapp.com/attachments/other.png",
     ],
+  );
+});
+
+test("skips untrusted image URLs that are not proxied by Discord", () => {
+  const message = {
+    attachments: new Map([
+      [
+        "attachment-1",
+        {
+          id: "attachment-1",
+          name: "proof.png",
+          contentType: "image/png",
+          size: 1234,
+          url: "https://example.com/proof.png",
+        },
+      ],
+    ]),
+    embeds: [
+      {
+        image: {
+          url: "https://example.com/image.png",
+        },
+      },
+    ],
+  };
+
+  assert.deepEqual(getMessageImageSources(message), []);
+});
+
+test("recognizes only trusted Discord image hosts", () => {
+  assert.equal(
+    isTrustedImageUrl("https://cdn.discordapp.com/attachments/proof.png"),
+    true,
+  );
+  assert.equal(
+    isTrustedImageUrl("https://media.discordapp.net/attachments/proof.png"),
+    true,
+  );
+  assert.equal(
+    isTrustedImageUrl("https://images-ext-2.discordapp.net/external/proof.png"),
+    true,
+  );
+  assert.equal(isTrustedImageUrl("http://cdn.discordapp.com/proof.png"), false);
+  assert.equal(isTrustedImageUrl("https://example.com/proof.png"), false);
+});
+
+test("rejects images above the configured pixel limit", async () => {
+  const image = await sharp({
+    create: {
+      width: 4,
+      height: 4,
+      channels: 3,
+      background: "#ffffff",
+    },
+  })
+    .png()
+    .toBuffer();
+
+  await assert.rejects(
+    assertSafeImageDimensions(image, 15),
+    /dimensions exceed/,
   );
 });

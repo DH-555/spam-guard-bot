@@ -1,7 +1,15 @@
-import { EmbedBuilder } from "discord.js";
+import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { performance } from "node:perf_hooks";
-import { containsScamPhrase, truncateText } from "./detection.js";
-import { downloadImage, getMessageImageSources } from "./images.js";
+import {
+  containsScamPhrase,
+  PARANOIA_LEVELS,
+  truncateText,
+} from "./detection.js";
+import {
+  assertSafeImageDimensions,
+  downloadImage,
+  getMessageImageSources,
+} from "./images.js";
 import { resolveLocale, t } from "./i18n.js";
 
 const REASON =
@@ -15,7 +23,13 @@ function resultLabel(result, locale) {
   return t(locale, "moderation", "noPrefix", result.reason instanceof Error ? result.reason.message : String(result.reason));
 }
 
-async function findMatchingImage(message, config, ocrService, visualMatcher) {
+async function findMatchingImage(
+  message,
+  config,
+  ocrService,
+  visualMatcher,
+  paranoiaLevel,
+) {
   const imageSources = getMessageImageSources(message);
 
   for (const source of imageSources) {
@@ -34,6 +48,7 @@ async function findMatchingImage(message, config, ocrService, visualMatcher) {
         config.maxImageBytes,
         config.imageDownloadTimeoutMs,
       );
+      await assertSafeImageDimensions(image, config.maxImagePixels);
       const downloadMs = performance.now() - downloadStartedAt;
       const visualStartedAt = performance.now();
       const visualMatch = visualMatcher ? await visualMatcher.match(image) : null;
@@ -52,17 +67,25 @@ async function findMatchingImage(message, config, ocrService, visualMatcher) {
         };
       }
 
-      const ocrStartedAt = performance.now();
-      const text = await ocrService.recognize(image);
-      const ocrMs = performance.now() - ocrStartedAt;
-      console.log(
-        `[Image analysis] ${source.label}: no visual match ` +
-          `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
-          `OCR ${ocrMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
-      );
+      if (paranoiaLevel !== PARANOIA_LEVELS.LOW) {
+        const ocrStartedAt = performance.now();
+        const text = await ocrService.recognize(image);
+        const ocrMs = performance.now() - ocrStartedAt;
+        console.log(
+          `[Image analysis] ${source.label}: no visual match ` +
+            `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
+            `OCR ${ocrMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
+        );
 
-      if (containsScamPhrase(text)) {
-        return { source, kind: "ocr", text };
+        if (containsScamPhrase(text, paranoiaLevel)) {
+          return { source, kind: "ocr", text };
+        }
+      } else {
+        console.log(
+          `[Image analysis] ${source.label}: no visual match ` +
+            `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
+            `OCR skipped by paranoia level; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
+        );
       }
     } catch (error) {
       console.error(`[Image analysis] Could not analyze ${source.label}:`, error);
@@ -76,7 +99,7 @@ async function sendModerationAlert(
   client,
   message,
   match,
-  config,
+  timeoutMs,
   moderationChannelId,
   deleteResult,
   timeoutResult,
@@ -90,7 +113,7 @@ async function sendModerationAlert(
     );
   }
 
-  const timeoutMinutes = Math.round(config.timeoutMs / 60_000);
+  const timeoutMinutes = Math.round(timeoutMs / 60_000);
   const detectionMethod =
     match.kind === "visual"
       ? t(
@@ -187,9 +210,35 @@ export function createMessageHandler({
       return;
     }
 
+    const excludedRoleIds = settingsStore.getExcludedRoleIds(message.guildId);
+
+    let member = message.member;
+
+    if (!member) {
+      try {
+        member = await message.guild.members.fetch(message.author.id);
+      } catch (error) {
+        console.warn(
+          `[Moderation] Could not resolve guild member ${message.author.id} in guild ${message.guildId}:`,
+          error,
+        );
+        return;
+      }
+    }
+
+    if (
+      message.guild.ownerId === message.author.id ||
+      member.permissions.has(PermissionFlagsBits.Administrator) ||
+      excludedRoleIds.some((roleId) => member.roles?.cache?.has?.(roleId))
+    ) {
+      return;
+    }
+
     const moderationChannelId = settingsStore.getModerationChannelId(
       message.guildId,
     );
+    const paranoiaLevel = settingsStore.getParanoiaLevel(message.guildId);
+    const timeoutMs = settingsStore.getTimeoutMs(message.guildId) ?? config.timeoutMs;
     const locale = resolveLocale(message.guild);
 
     const match = await findMatchingImage(
@@ -197,6 +246,7 @@ export function createMessageHandler({
       config,
       ocrService,
       visualMatcher,
+      paranoiaLevel,
     );
 
     if (!match) {
@@ -205,15 +255,11 @@ export function createMessageHandler({
 
     const deletePromise = Promise.resolve().then(() => message.delete());
     const timeoutPromise = Promise.resolve().then(async () => {
-      const member =
-        message.member ??
-        (await message.guild.members.fetch(message.author.id));
-
       if (!member.moderatable) {
         throw new Error(t(locale, "moderation", "timeoutFailure"));
       }
 
-      return member.timeout(config.timeoutMs, REASON);
+      return member.timeout(timeoutMs, REASON);
     });
 
     const [deleteResult, timeoutResult] = await Promise.allSettled([
@@ -227,7 +273,7 @@ export function createMessageHandler({
           client,
           message,
           match,
-          config,
+          timeoutMs,
           moderationChannelId,
           deleteResult,
           timeoutResult,

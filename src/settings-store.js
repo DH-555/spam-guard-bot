@@ -1,5 +1,14 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { normalizeParanoiaLevel } from "./detection.js";
+
+function normalizeRoleIds(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(value.filter((roleId) => typeof roleId === "string" && roleId.trim()))];
+}
 
 export class SettingsStore {
   #filePath;
@@ -35,10 +44,65 @@ export class SettingsStore {
     return typeof channelId === "string" ? channelId : null;
   }
 
+  getParanoiaLevel(guildId) {
+    return normalizeParanoiaLevel(this.#settings[guildId]?.paranoiaLevel);
+  }
+
+  getExcludedRoleIds(guildId) {
+    return normalizeRoleIds(this.#settings[guildId]?.excludedRoleIds);
+  }
+
+  getTimeoutMs(guildId) {
+    const timeoutMs = this.#settings[guildId]?.timeoutMs;
+    return Number.isInteger(timeoutMs) && timeoutMs > 0 ? timeoutMs : null;
+  }
+
   async setModerationChannelId(guildId, channelId) {
     this.#settings[guildId] = {
       ...this.#settings[guildId],
       moderationChannelId: channelId,
+    };
+
+    await this.#save();
+  }
+
+  async setParanoiaLevel(guildId, level) {
+    this.#settings[guildId] = {
+      ...this.#settings[guildId],
+      paranoiaLevel: normalizeParanoiaLevel(level),
+    };
+
+    await this.#save();
+  }
+
+  async addExcludedRoleId(guildId, roleId) {
+    const excludedRoleIds = new Set(this.getExcludedRoleIds(guildId));
+    excludedRoleIds.add(roleId);
+
+    this.#settings[guildId] = {
+      ...this.#settings[guildId],
+      excludedRoleIds: [...excludedRoleIds],
+    };
+
+    await this.#save();
+  }
+
+  async removeExcludedRoleId(guildId, roleId) {
+    const excludedRoleIds = new Set(this.getExcludedRoleIds(guildId));
+    excludedRoleIds.delete(roleId);
+
+    this.#settings[guildId] = {
+      ...this.#settings[guildId],
+      excludedRoleIds: [...excludedRoleIds],
+    };
+
+    await this.#save();
+  }
+
+  async setTimeoutMs(guildId, timeoutMs) {
+    this.#settings[guildId] = {
+      ...this.#settings[guildId],
+      timeoutMs: Number.isInteger(timeoutMs) && timeoutMs > 0 ? timeoutMs : null,
     };
 
     await this.#save();

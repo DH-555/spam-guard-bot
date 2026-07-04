@@ -3,6 +3,7 @@ import { basename, dirname, extname, relative, resolve } from "node:path";
 import sharp from "sharp";
 
 const HASH_ALGORITHM = "sharp-dhash-64-v1";
+const DEFAULT_MAX_IMAGE_PIXELS = 16_000_000;
 const IMAGE_EXTENSIONS = new Set([
   ".avif",
   ".bmp",
@@ -75,8 +76,11 @@ export async function loadVisualReferenceSources(referencePath) {
   return [];
 }
 
-async function computeImageHash(input) {
-  const pixels = await sharp(input, { animated: false })
+async function computeImageHash(input, maxPixels = DEFAULT_MAX_IMAGE_PIXELS) {
+  const pixels = await sharp(input, {
+    animated: false,
+    limitInputPixels: maxPixels,
+  })
     .autoOrient()
     .grayscale()
     .resize(9, 8, { fit: "fill", kernel: sharp.kernel.lanczos3 })
@@ -194,12 +198,17 @@ function hammingDistance(hashA, hashB) {
   return distance;
 }
 
-async function hashCandidateImage(buffer) {
-  return computeImageHash(buffer);
+async function hashCandidateImage(buffer, maxPixels) {
+  return computeImageHash(buffer, maxPixels);
 }
 
-export async function buildVisualReferenceMatcher(references, threshold) {
+export async function buildVisualReferenceMatcher(
+  references,
+  threshold,
+  options = {},
+) {
   const normalizedReferences = references.map(normalizeManifestEntry).filter(Boolean);
+  const maxImagePixels = options.maxImagePixels ?? DEFAULT_MAX_IMAGE_PIXELS;
 
   return {
     references: normalizedReferences,
@@ -209,7 +218,7 @@ export async function buildVisualReferenceMatcher(references, threshold) {
         return null;
       }
 
-      const candidateHash = await hashCandidateImage(buffer);
+      const candidateHash = await hashCandidateImage(buffer, maxImagePixels);
       let bestMatch = null;
 
       for (const reference of normalizedReferences) {

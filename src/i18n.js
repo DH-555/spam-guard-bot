@@ -31,12 +31,24 @@ const STRINGS = {
         "You need the Manage Server permission to use this command.",
       missingBotPermissions:
         "The bot needs View Channel, Send Messages, and Embed Links permissions in the selected channel.",
+      paranoiaSaved: (level) => `The paranoia level is now set to ${level}.`,
+      timeoutSaved: (minutes) => `The timeout is now set to ${minutes} minutes.`,
+      excludedRoleAdded: (role) => `The role ${role} is now excluded from detection.`,
+      excludedRoleRemoved: (role) => `The role ${role} is no longer excluded from detection.`,
+      excludedRolesList: (roles) => `Excluded roles: ${roles}`,
       saved: (channel) => `Moderation alerts will now be sent to ${channel}.`,
       currentSet: (channelId) =>
         `The moderation channel is currently set to <#${channelId}>.`,
+      currentParanoia: (level) => `The paranoia level is currently set to ${level}.`,
+      currentTimeout: (minutes) => `The timeout is currently set to ${minutes} minutes.`,
+      currentExcludedRoles: (roles) => `Excluded roles: ${roles}`,
       notConfigured:
         "No moderation channel has been configured. Use `/setup moderation-channel`.",
       configError: "The configuration could not be saved. Check the bot logs.",
+      noExcludedRoles: "none",
+      paranoiaLow: "low",
+      paranoiaMedium: "medium",
+      paranoiaHigh: "high",
     },
   },
   es: {
@@ -71,13 +83,27 @@ const STRINGS = {
         "Necesitas el permiso Gestionar servidor para usar este comando.",
       missingBotPermissions:
         "El bot necesita permisos de Ver canal, Enviar mensajes y Insertar enlaces en el canal seleccionado.",
+      paranoiaSaved: (level) => `El nivel de paranoia ahora es ${level}.`,
+      timeoutSaved: (minutes) => `El timeout ahora está configurado en ${minutes} minutos.`,
+      excludedRoleAdded: (role) => `El rol ${role} ahora está excluido de la detección.`,
+      excludedRoleRemoved: (role) => `El rol ${role} ya no está excluido de la detección.`,
+      excludedRolesList: (roles) => `Roles excluidos: ${roles}`,
       saved: (channel) => `Las alertas de moderación se enviarán a ${channel}.`,
       currentSet: (channelId) =>
         `El canal de moderación está configurado actualmente en <#${channelId}>.`,
+      currentParanoia: (level) =>
+        `El nivel de paranoia está configurado actualmente en ${level}.`,
+      currentTimeout: (minutes) =>
+        `El timeout está configurado actualmente en ${minutes} minutos.`,
+      currentExcludedRoles: (roles) => `Roles excluidos: ${roles}`,
       notConfigured:
         "No se ha configurado ningún canal de moderación. Usa `/setup moderation-channel`.",
       configError:
         "No se pudo guardar la configuración. Revisa los registros del bot.",
+      noExcludedRoles: "ninguno",
+      paranoiaLow: "bajo",
+      paranoiaMedium: "medio",
+      paranoiaHigh: "alto",
     },
   },
 };

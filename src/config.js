@@ -44,6 +44,22 @@ function readNonNegativeInteger(name, fallback) {
   return value;
 }
 
+function readPositiveInteger(name, fallback) {
+  const rawValue = process.env[name];
+
+  if (rawValue === undefined || rawValue === "") {
+    return fallback;
+  }
+
+  const value = Number(rawValue);
+
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a whole number greater than 0.`);
+  }
+
+  return value;
+}
+
 export function loadConfig() {
   const timeoutMs = readPositiveNumber("TIMEOUT_MINUTES", 1440) * 60 * 1000;
 
@@ -65,5 +81,6 @@ export function loadConfig() {
         "generated/visual-reference-manifest.json",
     ),
     visualMatchThreshold: readNonNegativeInteger("VISUAL_MATCH_THRESHOLD", 6),
+    maxImagePixels: readPositiveInteger("MAX_IMAGE_PIXELS", 16_000_000),
   };
 }
