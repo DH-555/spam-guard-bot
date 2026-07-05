@@ -2,8 +2,7 @@ const STRINGS = {
   en: {
     moderation: {
       alertTitle: "Suspicious image blocked",
-      alertDescription:
-        "Withdrawal and successful-status keywords were detected in an image.",
+      alertDescription: "A suspicious image was detected.",
       alertContent: (tag) => `Moderation alert: ${tag}`,
       user: "User",
       channel: "Channel",
@@ -57,8 +56,7 @@ const STRINGS = {
   es: {
     moderation: {
       alertTitle: "Se bloqueó una imagen sospechosa",
-      alertDescription:
-        "Se detectaron palabras clave de retirada y estado exitoso en una imagen.",
+      alertDescription: "Se detectó una imagen sospechosa.",
       alertContent: (tag) => `Aviso de moderación: ${tag}`,
       user: "Usuario",
       channel: "Canal",

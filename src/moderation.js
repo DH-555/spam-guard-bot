@@ -13,7 +13,7 @@ import {
 import { resolveLocale, t } from "./i18n.js";
 
 const REASON =
-  "Image detected containing withdrawal and successful-status keywords.";
+  "Image detected by moderation rules.";
 
 function resultLabel(result, locale) {
   if (result.status === "fulfilled") {
@@ -130,7 +130,6 @@ async function sendModerationAlert(
   const embed = new EmbedBuilder()
     .setColor(0xed4245)
     .setTitle(t(locale, "moderation", "alertTitle"))
-    .setDescription(t(locale, "moderation", "alertDescription"))
     .addFields(
       {
         name: t(locale, "moderation", "user"),
