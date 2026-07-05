@@ -10,6 +10,10 @@ function normalizeRoleIds(value) {
   return [...new Set(value.filter((roleId) => typeof roleId === "string" && roleId.trim()))];
 }
 
+function normalizeExcludedAdministrators(value) {
+  return typeof value === "boolean" ? value : true;
+}
+
 export class SettingsStore {
   #filePath;
   #settings = {};
@@ -52,6 +56,12 @@ export class SettingsStore {
     return normalizeRoleIds(this.#settings[guildId]?.excludedRoleIds);
   }
 
+  getExcludedAdministrators(guildId) {
+    return normalizeExcludedAdministrators(
+      this.#settings[guildId]?.excludedAdministrators,
+    );
+  }
+
   getTimeoutMs(guildId) {
     const timeoutMs = this.#settings[guildId]?.timeoutMs;
     return Number.isInteger(timeoutMs) && timeoutMs > 0 ? timeoutMs : null;
@@ -82,6 +92,15 @@ export class SettingsStore {
     this.#settings[guildId] = {
       ...this.#settings[guildId],
       excludedRoleIds: [...excludedRoleIds],
+    };
+
+    await this.#save();
+  }
+
+  async setExcludedAdministrators(guildId, excludedAdministrators) {
+    this.#settings[guildId] = {
+      ...this.#settings[guildId],
+      excludedAdministrators: normalizeExcludedAdministrators(excludedAdministrators),
     };
 
     await this.#save();

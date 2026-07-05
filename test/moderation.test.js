@@ -133,6 +133,7 @@ test("moderates and posts a fallback notice when no moderation channel is config
         getModerationChannelId: () => null,
         getParanoiaLevel: () => "high",
         getExcludedRoleIds: () => [],
+        getExcludedAdministrators: () => true,
         getTimeoutMs: () => null,
       },
     });
@@ -257,6 +258,7 @@ test("deletes the whole message when only one image matches", async () => {
         getModerationChannelId: () => null,
         getParanoiaLevel: () => "high",
         getExcludedRoleIds: () => [],
+        getExcludedAdministrators: () => true,
         getTimeoutMs: () => null,
       },
       visualMatcher,
@@ -355,6 +357,7 @@ test("ignores guild administrators", async () => {
         getModerationChannelId: () => null,
         getParanoiaLevel: () => "high",
         getExcludedRoleIds: () => [],
+        getExcludedAdministrators: () => true,
         getTimeoutMs: () => null,
       },
     });
@@ -364,6 +367,97 @@ test("ignores guild administrators", async () => {
     assert.equal(deleted, 0);
     assert.equal(ocrCalls, 0);
     assert.equal(channelMessages.length, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("moderates guild administrators when administrator exclusion is disabled", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
+
+  try {
+    let deleted = 0;
+    let timeoutValue = null;
+    const channelMessages = [];
+    const message = {
+      id: "message-admin-enabled",
+      guildId: "guild-1",
+      channelId: "channel-1",
+      author: {
+        id: "user-admin-enabled",
+        tag: "admin#0001",
+        bot: false,
+        displayAvatarURL: () => "https://example.com/avatar.png",
+        toString: () => "<@user-admin-enabled>",
+      },
+      channel: {
+        isTextBased: () => true,
+        isSendable: () => true,
+        send: async (payload) => {
+          channelMessages.push(payload);
+        },
+      },
+      guild: {
+        preferredLocale: "en-US",
+        ownerId: "owner-1",
+      },
+      attachments: new Map([
+        [
+          "attachment-1",
+          {
+            id: "attachment-1",
+            name: "proof.png",
+            contentType: "image/png",
+            size: imageBuffer.length,
+            url: imageUrl("proof"),
+          },
+        ],
+      ]),
+      embeds: [],
+      messageSnapshots: new Map(),
+      member: {
+        moderatable: true,
+        permissions: {
+          has: () => true,
+        },
+        timeout: async (value) => {
+          timeoutValue = value;
+        },
+      },
+      delete: async () => {
+        deleted += 1;
+      },
+      webhookId: null,
+      inGuild: () => true,
+    };
+
+    const handleMessage = createMessageHandler({
+      client: {},
+      config: {
+        maxImageBytes: 1024,
+        maxImagePixels: 16_000_000,
+        imageDownloadTimeoutMs: 1000,
+        timeoutMs: 60_000,
+      },
+      ocrService: {
+        recognize: async () => "Withdrawal\nSucceeded",
+      },
+      settingsStore: {
+        getModerationChannelId: () => null,
+        getParanoiaLevel: () => "high",
+        getExcludedRoleIds: () => [],
+        getExcludedAdministrators: () => false,
+        getTimeoutMs: () => null,
+      },
+    });
+
+    await handleMessage(message);
+
+    assert.equal(deleted, 1);
+    assert.equal(timeoutValue, 60_000);
+    assert.equal(channelMessages.length, 1);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -446,6 +540,7 @@ test("ignores members with excluded roles", async () => {
         getModerationChannelId: () => null,
         getParanoiaLevel: () => "high",
         getExcludedRoleIds: () => ["role-1"],
+        getExcludedAdministrators: () => true,
         getTimeoutMs: () => null,
       },
     });
@@ -529,6 +624,7 @@ test("uses the server timeout setting when timing out a user", async () => {
         getModerationChannelId: () => null,
         getParanoiaLevel: () => "high",
         getExcludedRoleIds: () => [],
+        getExcludedAdministrators: () => true,
         getTimeoutMs: () => 15 * 60_000,
       },
     });

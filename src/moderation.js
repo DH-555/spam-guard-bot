@@ -214,6 +214,8 @@ export function createMessageHandler({
     }
 
     const excludedRoleIds = settingsStore.getExcludedRoleIds(message.guildId);
+    const excludedAdministrators =
+      settingsStore.getExcludedAdministrators(message.guildId);
 
     let member = message.member;
 
@@ -231,7 +233,8 @@ export function createMessageHandler({
 
     if (
       message.guild.ownerId === message.author.id ||
-      member.permissions.has(PermissionFlagsBits.Administrator) ||
+      (excludedAdministrators &&
+        member.permissions.has(PermissionFlagsBits.Administrator)) ||
       excludedRoleIds.some((roleId) => member.roles?.cache?.has?.(roleId))
     ) {
       return;

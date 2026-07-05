@@ -35,6 +35,8 @@ const STRINGS = {
       timeoutSaved: (minutes) => `The timeout is now set to ${minutes} minutes.`,
       excludedRoleAdded: (role) => `The role ${role} is now excluded from detection.`,
       excludedRoleRemoved: (role) => `The role ${role} is no longer excluded from detection.`,
+      excludedAdministratorsEnabled: "Server administrators are now excluded from detection.",
+      excludedAdministratorsDisabled: "Server administrators are no longer excluded from detection.",
       excludedRolesList: (roles) => `Excluded roles: ${roles}`,
       saved: (channel) => `Moderation alerts will now be sent to ${channel}.`,
       currentSet: (channelId) =>
@@ -42,6 +44,7 @@ const STRINGS = {
       currentParanoia: (level) => `The paranoia level is currently set to ${level}.`,
       currentTimeout: (minutes) => `The timeout is currently set to ${minutes} minutes.`,
       currentExcludedRoles: (roles) => `Excluded roles: ${roles}`,
+      excludedAdministratorsLabel: "admin",
       notConfigured:
         "No moderation channel has been configured. Use `/setup moderation-channel`.",
       configError: "The configuration could not be saved. Check the bot logs.",
@@ -87,6 +90,10 @@ const STRINGS = {
       timeoutSaved: (minutes) => `El timeout ahora está configurado en ${minutes} minutos.`,
       excludedRoleAdded: (role) => `El rol ${role} ahora está excluido de la detección.`,
       excludedRoleRemoved: (role) => `El rol ${role} ya no está excluido de la detección.`,
+      excludedAdministratorsEnabled:
+        "Los administradores del servidor ahora están excluidos de la detección.",
+      excludedAdministratorsDisabled:
+        "Los administradores del servidor ya no están excluidos de la detección.",
       excludedRolesList: (roles) => `Roles excluidos: ${roles}`,
       saved: (channel) => `Las alertas de moderación se enviarán a ${channel}.`,
       currentSet: (channelId) =>
@@ -96,6 +103,7 @@ const STRINGS = {
       currentTimeout: (minutes) =>
         `El timeout está configurado actualmente en ${minutes} minutos.`,
       currentExcludedRoles: (roles) => `Roles excluidos: ${roles}`,
+      excludedAdministratorsLabel: "admin",
       notConfigured:
         "No se ha configurado ningún canal de moderación. Usa `/setup moderation-channel`.",
       configError:

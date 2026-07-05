@@ -19,6 +19,7 @@ test("stores moderation channels separately for each guild", async () => {
   await store.addExcludedRoleId("guild-1", "role-1");
   await store.addExcludedRoleId("guild-1", "role-2");
   await store.addExcludedRoleId("guild-1", "role-1");
+  assert.equal(store.getExcludedAdministrators("guild-1"), true);
 
   assert.equal(store.getModerationChannelId("guild-1"), "channel-1");
   assert.equal(store.getModerationChannelId("guild-2"), "channel-2");
@@ -32,6 +33,7 @@ test("stores moderation channels separately for each guild", async () => {
   assert.equal(savedSettings["guild-1"].paranoiaLevel, "low");
   assert.equal(savedSettings["guild-1"].timeoutMs, 5 * 60_000);
   assert.deepEqual(savedSettings["guild-1"].excludedRoleIds, ["role-1", "role-2"]);
+  assert.equal(savedSettings["guild-1"].excludedAdministrators, undefined);
 });
 
 test("loads previously saved settings", async () => {
@@ -44,6 +46,7 @@ test("loads previously saved settings", async () => {
   await firstStore.setParanoiaLevel("guild-1", "high");
   await firstStore.setTimeoutMs("guild-1", 15 * 60_000);
   await firstStore.addExcludedRoleId("guild-1", "role-1");
+  await firstStore.setExcludedAdministrators("guild-1", false);
 
   const secondStore = new SettingsStore(filePath);
   await secondStore.load();
@@ -52,8 +55,10 @@ test("loads previously saved settings", async () => {
   assert.equal(secondStore.getParanoiaLevel("guild-1"), "high");
   assert.equal(secondStore.getTimeoutMs("guild-1"), 15 * 60_000);
   assert.deepEqual(secondStore.getExcludedRoleIds("guild-1"), ["role-1"]);
+  assert.equal(secondStore.getExcludedAdministrators("guild-1"), false);
   assert.equal(secondStore.getModerationChannelId("unknown"), null);
   assert.equal(secondStore.getParanoiaLevel("unknown"), "high");
   assert.equal(secondStore.getTimeoutMs("unknown"), null);
   assert.deepEqual(secondStore.getExcludedRoleIds("unknown"), []);
+  assert.equal(secondStore.getExcludedAdministrators("unknown"), true);
 });

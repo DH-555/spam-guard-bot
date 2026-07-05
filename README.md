@@ -40,6 +40,7 @@ Server admins can also:
 
 - Set a custom timeout with `/setup timeout`.
 - Exclude roles from detection with `/setup excluded-role add`, `/setup excluded-role remove`, and `/setup excluded-role list`.
+- Toggle whether server administrators are excluded with `/setup excluded-administrators enable` and `/setup excluded-administrators disable`.
 
 For example, an image containing `Withdrawal` near the top and `Succeeded`
 near the bottom is considered a match.
@@ -153,6 +154,7 @@ Server administrators with **Manage Server** can configure the bot with:
 - `/setup paranoia` to set the per-server detection sensitivity.
 - `/setup timeout` to set the per-server timeout.
 - `/setup excluded-role ...` to manage ignored roles.
+- `/setup excluded-administrators ...` to include or exclude server administrators.
 - `/setup status` to review the current configuration.
 
 ## Docker

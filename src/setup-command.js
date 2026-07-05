@@ -83,6 +83,21 @@ const setupCommand = new SlashCommandBuilder()
         subcommand.setName("list").setDescription("Show excluded roles."),
       ),
   )
+  .addSubcommandGroup((group) =>
+    group
+      .setName("excluded-administrators")
+      .setDescription("Manage whether server administrators are ignored.")
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("enable")
+          .setDescription("Exclude server administrators from detection."),
+      )
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("disable")
+          .setDescription("Allow server administrators to be moderated."),
+      ),
+  )
   .addSubcommand((subcommand) =>
     subcommand
       .setName("status")
@@ -104,13 +119,23 @@ function formatTimeoutMinutes(timeoutMs) {
   return Math.max(1, Math.round(timeoutMs / 60_000));
 }
 
-function formatExcludedRoles(interaction, roleIds) {
-  if (roleIds.length === 0) {
+function formatExcludedRoles(interaction, roleIds, excludedAdministrators) {
+  const roles = [...roleIds];
+
+  if (excludedAdministrators) {
+    roles.unshift(t(resolveLocale(interaction), "setup", "excludedAdministratorsLabel"));
+  }
+
+  if (roles.length === 0) {
     return t(resolveLocale(interaction), "setup", "noExcludedRoles");
   }
 
-  return roleIds
-    .map((roleId) => interaction.guild.roles.cache.get(roleId)?.toString() ?? `<@&${roleId}>`)
+  return roles
+    .map((roleId) =>
+      roleId === t(resolveLocale(interaction), "setup", "excludedAdministratorsLabel")
+        ? roleId
+        : interaction.guild.roles.cache.get(roleId)?.toString() ?? `<@&${roleId}>`,
+    )
     .join(", ");
 }
 
@@ -230,22 +255,50 @@ export function createSetupCommandHandler({ settingsStore, config }) {
       }
 
       const excludedRoleIds = settingsStore.getExcludedRoleIds(interaction.guildId);
+      const excludedAdministrators =
+        settingsStore.getExcludedAdministrators(interaction.guildId);
       await interaction.reply({
         content: t(
           locale,
           "setup",
           "excludedRolesList",
-          formatExcludedRoles(interaction, excludedRoleIds),
+          formatExcludedRoles(
+            interaction,
+            excludedRoleIds,
+            excludedAdministrators,
+          ),
         ),
         flags: MessageFlags.Ephemeral,
       });
       return;
     }
 
+    if (subcommandGroup === "excluded-administrators") {
+      if (subcommand === "enable") {
+        await settingsStore.setExcludedAdministrators(interaction.guildId, true);
+        await interaction.reply({
+          content: t(locale, "setup", "excludedAdministratorsEnabled"),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (subcommand === "disable") {
+        await settingsStore.setExcludedAdministrators(interaction.guildId, false);
+        await interaction.reply({
+          content: t(locale, "setup", "excludedAdministratorsDisabled"),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+    }
+
     const channelId = settingsStore.getModerationChannelId(interaction.guildId);
     const paranoiaLevel = settingsStore.getParanoiaLevel(interaction.guildId);
     const timeoutMs = settingsStore.getTimeoutMs(interaction.guildId) ?? config.timeoutMs;
     const excludedRoleIds = settingsStore.getExcludedRoleIds(interaction.guildId);
+    const excludedAdministrators =
+      settingsStore.getExcludedAdministrators(interaction.guildId);
     await interaction.reply({
       content: [
         channelId
@@ -253,7 +306,12 @@ export function createSetupCommandHandler({ settingsStore, config }) {
           : t(locale, "setup", "notConfigured"),
         t(locale, "setup", "currentParanoia", formatParanoiaLevel(locale, paranoiaLevel)),
         t(locale, "setup", "currentTimeout", formatTimeoutMinutes(timeoutMs)),
-        t(locale, "setup", "currentExcludedRoles", formatExcludedRoles(interaction, excludedRoleIds)),
+        t(
+          locale,
+          "setup",
+          "currentExcludedRoles",
+          formatExcludedRoles(interaction, excludedRoleIds, excludedAdministrators),
+        ),
       ].join("\n"),
       flags: MessageFlags.Ephemeral,
     });
