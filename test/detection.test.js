@@ -29,6 +29,10 @@ test("detects supported success status variants", () => {
   assert.equal(containsScamPhrase("Withdrawal\nSuccess!"), true);
   assert.equal(containsScamPhrase("Withdrawal\nSuccessfully!"), true);
   assert.equal(containsScamPhrase("Withdrawal\nUSDT"), true);
+  assert.equal(
+    containsScamPhrase("Withdrawal\nAmount\nCompleted\nTransfer"),
+    true,
+  );
 });
 
 test("requires all OCR keywords at medium paranoia", () => {
@@ -70,6 +74,20 @@ test("requires a withdrawal keyword and a complete success keyword", () => {
   assert.equal(containsScamPhrase("Withdrawal USDC"), false);
   assert.equal(containsScamPhrase("USDT"), false);
   assert.equal(containsScamPhrase("Withdrawal usdt"), false);
+});
+
+test("supports extreme paranoia triggers", () => {
+  assert.equal(containsScamPhrase("succs", PARANOIA_LEVELS.EXTREME), true);
+  assert.equal(containsScamPhrase("TRX", PARANOIA_LEVELS.EXTREME), true);
+  assert.equal(containsScamPhrase("money", PARANOIA_LEVELS.EXTREME), true);
+  assert.equal(containsScamPhrase("mr beast", PARANOIA_LEVELS.EXTREME), true);
+  assert.equal(containsScamPhrase("cryptocurrency", PARANOIA_LEVELS.EXTREME), true);
+  assert.equal(containsScamPhrase("casino!", PARANOIA_LEVELS.EXTREME), true);
+  assert.equal(containsScamPhrase("giveaway", PARANOIA_LEVELS.EXTREME), true);
+  assert.equal(containsScamPhrase("giving away", PARANOIA_LEVELS.EXTREME), true);
+  assert.equal(containsScamPhrase("bets", PARANOIA_LEVELS.EXTREME), true);
+  assert.equal(containsScamPhrase("bonus", PARANOIA_LEVELS.EXTREME), true);
+  assert.equal(containsScamPhrase("bonuses", PARANOIA_LEVELS.EXTREME), true);
 });
 
 test("normalizes OCR text", () => {

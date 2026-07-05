@@ -1,10 +1,31 @@
 const WITHDRAWAL_KEYWORDS = ["WITHDRAWAL"];
 const SUCCESS_KEYWORDS = ["SUCCESS", "SUCCEEDED", "SUCCESSFUL", "SUCCESSFULLY"];
 const USDT_KEYWORDS = ["USDT"];
+const AMOUNT_KEYWORDS = ["AMOUNT"];
+const COMPLETED_KEYWORDS = ["COMPLETED"];
+const TRANSFER_KEYWORDS = ["TRANSFER"];
+const EXTREME_KEYWORDS = [
+  "WITHDRAWAL",
+  "AMOUNT",
+  "COMPLETED",
+  "TRANSFER",
+  "SUCCS",
+  "TRX",
+  "MONEY",
+  "MR BEAST",
+  "CRYPTOCURRENCY",
+  "CASINO",
+  "GIVEAWAY",
+  "GIVING AWAY",
+  "BETS",
+  "BONUS",
+  "BONUSES",
+];
 export const PARANOIA_LEVELS = Object.freeze({
   LOW: "low",
   MEDIUM: "medium",
   HIGH: "high",
+  EXTREME: "extreme",
 });
 
 export const DEFAULT_PARANOIA_LEVEL = PARANOIA_LEVELS.HIGH;
@@ -28,11 +49,27 @@ export function normalizeParanoiaLevel(level) {
     return PARANOIA_LEVELS.HIGH;
   }
 
+  if (normalized === PARANOIA_LEVELS.EXTREME) {
+    return PARANOIA_LEVELS.EXTREME;
+  }
+
   return DEFAULT_PARANOIA_LEVEL;
 }
 
 function containsWholeWord(text, word) {
   return new RegExp(`\\b${word}\\b`, "u").test(text);
+}
+
+function containsPhrase(text, phrase) {
+  return text.includes(phrase);
+}
+
+function hasAnyKeyword(text, keywords) {
+  return keywords.some((word) => containsWholeWord(text, word));
+}
+
+function hasAnyPhrase(text, phrases) {
+  return phrases.some((phrase) => containsPhrase(text, phrase));
 }
 
 export function normalizeOcrText(text) {
@@ -52,21 +89,29 @@ export function containsScamPhrase(text, paranoiaLevel = DEFAULT_PARANOIA_LEVEL)
   const rawText = text;
   const normalizedText = normalizeOcrText(text);
 
-  const hasWithdrawalKeyword = WITHDRAWAL_KEYWORDS.some((word) =>
-    containsWholeWord(normalizedText, word),
-  );
-  const hasSuccessKeyword = SUCCESS_KEYWORDS.some((word) =>
-    containsWholeWord(normalizedText, word),
-  );
-  const hasUsdtKeyword = USDT_KEYWORDS.some((word) =>
-    containsWholeWord(rawText, word),
-  );
+  const hasWithdrawalKeyword = hasAnyKeyword(normalizedText, WITHDRAWAL_KEYWORDS);
+  const hasSuccessKeyword = hasAnyKeyword(normalizedText, SUCCESS_KEYWORDS);
+  const hasUsdtKeyword = hasAnyKeyword(rawText, USDT_KEYWORDS);
+  const hasAmountKeyword = hasAnyKeyword(normalizedText, AMOUNT_KEYWORDS);
+  const hasCompletedKeyword = hasAnyKeyword(normalizedText, COMPLETED_KEYWORDS);
+  const hasTransferKeyword = hasAnyKeyword(normalizedText, TRANSFER_KEYWORDS);
+  const hasExtremeKeyword = hasAnyKeyword(normalizedText, EXTREME_KEYWORDS) ||
+    hasAnyPhrase(normalizedText, EXTREME_KEYWORDS);
 
   if (normalizedLevel === PARANOIA_LEVELS.MEDIUM) {
     return hasWithdrawalKeyword && hasSuccessKeyword && hasUsdtKeyword;
   }
 
-  return hasWithdrawalKeyword && (hasSuccessKeyword || hasUsdtKeyword);
+  if (normalizedLevel === PARANOIA_LEVELS.EXTREME) {
+    return hasExtremeKeyword;
+  }
+
+  return (
+    hasWithdrawalKeyword &&
+    (hasSuccessKeyword ||
+      hasUsdtKeyword ||
+      (hasAmountKeyword && hasCompletedKeyword && hasTransferKeyword))
+  );
 }
 
 export function truncateText(text, maxLength = 900) {

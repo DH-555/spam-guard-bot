@@ -51,6 +51,7 @@ const STRINGS = {
       paranoiaLow: "low",
       paranoiaMedium: "medium",
       paranoiaHigh: "high",
+      paranoiaExtreme: "extreme",
     },
   },
   es: {
@@ -110,6 +111,7 @@ const STRINGS = {
       paranoiaLow: "bajo",
       paranoiaMedium: "medio",
       paranoiaHigh: "alto",
+      paranoiaExtreme: "extremo",
     },
   },
 };

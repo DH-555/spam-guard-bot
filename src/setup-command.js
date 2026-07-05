@@ -37,6 +37,7 @@ const setupCommand = new SlashCommandBuilder()
             { name: "low", value: PARANOIA_LEVELS.LOW },
             { name: "medium", value: PARANOIA_LEVELS.MEDIUM },
             { name: "high", value: PARANOIA_LEVELS.HIGH },
+            { name: "extreme", value: PARANOIA_LEVELS.EXTREME },
           ),
       ),
   )
@@ -110,6 +111,8 @@ function formatParanoiaLevel(locale, level) {
       return t(locale, "setup", "paranoiaLow");
     case PARANOIA_LEVELS.MEDIUM:
       return t(locale, "setup", "paranoiaMedium");
+    case PARANOIA_LEVELS.EXTREME:
+      return t(locale, "setup", "paranoiaExtreme");
     default:
       return t(locale, "setup", "paranoiaHigh");
   }
