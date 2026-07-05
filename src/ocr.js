@@ -107,9 +107,10 @@ export class OcrService {
   }
 
   async recognize(image, options = {}) {
+    const effort = normalizeOcrEffort(options.effort ?? this.#effort);
     const task = this.#queue.then(async () => {
       const worker = await this.#getWorker();
-      const variants = await buildOcrVariants(image, this.#effort);
+      const variants = await buildOcrVariants(image, effort);
       const recognizedTexts = [];
 
       for (const variant of variants) {
@@ -129,6 +130,33 @@ export class OcrService {
 
     this.#queue = task.catch(() => undefined);
     return task;
+  }
+
+  async recognizeWithFallback(image, options = {}) {
+    const shouldStop = options.shouldStop;
+    const lowText = await this.recognize(image, {
+      ...options,
+      effort: OCR_EFFORTS.LOW,
+    });
+
+    if (shouldStop?.(lowText)) {
+      return lowText;
+    }
+
+    const highText = await this.recognize(image, {
+      ...options,
+      effort: OCR_EFFORTS.HIGH,
+    });
+
+    if (!lowText) {
+      return highText;
+    }
+
+    if (!highText) {
+      return lowText;
+    }
+
+    return `${lowText}\n${highText}`;
   }
 
   async terminate() {

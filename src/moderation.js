@@ -69,7 +69,10 @@ async function findMatchingImage(
 
       if (paranoiaLevel !== PARANOIA_LEVELS.LOW) {
         const ocrStartedAt = performance.now();
-        const text = await ocrService.recognize(image, {
+        const recognizeOcr =
+          ocrService.recognizeWithFallback?.bind(ocrService) ??
+          ocrService.recognize.bind(ocrService);
+        const text = await recognizeOcr(image, {
           shouldStop: (recognizedText) =>
             containsScamPhrase(recognizedText, paranoiaLevel),
         });
