@@ -231,12 +231,14 @@ export function createMessageHandler({
       }
     }
 
-    if (
+    const hasAdministratorBypass =
       message.guild.ownerId === message.author.id ||
-      (excludedAdministrators &&
-        member.permissions.has(PermissionFlagsBits.Administrator)) ||
-      excludedRoleIds.some((roleId) => member.roles?.cache?.has?.(roleId))
-    ) {
+      member.permissions.has(PermissionFlagsBits.Administrator);
+    const hasExcludedRole = excludedRoleIds.some((roleId) =>
+      member.roles?.cache?.has?.(roleId),
+    );
+
+    if ((excludedAdministrators && hasAdministratorBypass) || hasExcludedRole) {
       return;
     }
 

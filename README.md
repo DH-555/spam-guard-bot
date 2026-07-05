@@ -109,8 +109,10 @@ If the bot cannot apply a timeout because of role hierarchy or permissions, it
 still attempts to delete the message and records the timeout failure in the
 moderation alert.
 
-Messages from server administrators are ignored completely. The bot does not
-scan them, delete them, or time them out.
+By default, messages from server administrators and the server owner are ignored
+completely. Use `/setup excluded-administrators disable` to scan them too. When
+administrator exclusion is disabled, Discord may still prevent the timeout, but
+the bot can still delete matching messages when it has permission.
 
 Members with an excluded role are also ignored completely.
 

@@ -463,6 +463,97 @@ test("moderates guild administrators when administrator exclusion is disabled", 
   }
 });
 
+test("moderates the guild owner when administrator exclusion is disabled", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
+
+  try {
+    let deleted = 0;
+    let timeoutValue = null;
+    const channelMessages = [];
+    const message = {
+      id: "message-owner-enabled",
+      guildId: "guild-1",
+      channelId: "channel-1",
+      author: {
+        id: "owner-1",
+        tag: "owner#0001",
+        bot: false,
+        displayAvatarURL: () => "https://example.com/avatar.png",
+        toString: () => "<@owner-1>",
+      },
+      channel: {
+        isTextBased: () => true,
+        isSendable: () => true,
+        send: async (payload) => {
+          channelMessages.push(payload);
+        },
+      },
+      guild: {
+        preferredLocale: "en-US",
+        ownerId: "owner-1",
+      },
+      attachments: new Map([
+        [
+          "attachment-1",
+          {
+            id: "attachment-1",
+            name: "proof.png",
+            contentType: "image/png",
+            size: imageBuffer.length,
+            url: imageUrl("proof"),
+          },
+        ],
+      ]),
+      embeds: [],
+      messageSnapshots: new Map(),
+      member: {
+        moderatable: true,
+        permissions: {
+          has: () => true,
+        },
+        timeout: async (value) => {
+          timeoutValue = value;
+        },
+      },
+      delete: async () => {
+        deleted += 1;
+      },
+      webhookId: null,
+      inGuild: () => true,
+    };
+
+    const handleMessage = createMessageHandler({
+      client: {},
+      config: {
+        maxImageBytes: 1024,
+        maxImagePixels: 16_000_000,
+        imageDownloadTimeoutMs: 1000,
+        timeoutMs: 60_000,
+      },
+      ocrService: {
+        recognize: async () => "Withdrawal\nSucceeded",
+      },
+      settingsStore: {
+        getModerationChannelId: () => null,
+        getParanoiaLevel: () => "high",
+        getExcludedRoleIds: () => [],
+        getExcludedAdministrators: () => false,
+        getTimeoutMs: () => null,
+      },
+    });
+
+    await handleMessage(message);
+
+    assert.equal(deleted, 1);
+    assert.equal(timeoutValue, 60_000);
+    assert.equal(channelMessages.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("ignores members with excluded roles", async () => {
   const originalFetch = globalThis.fetch;
   const imageBuffer = await createHorizontalGradient(32, 32);
