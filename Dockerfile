@@ -15,7 +15,7 @@ FROM dependencies AS manifests
 COPY src ./src
 COPY scripts ./scripts
 COPY visual-references ./visual-references
-COPY easter-egg\ photos ./easter-egg\ photos
+COPY ["easter-egg photos", "./easter-egg photos"]
 RUN pnpm build:visual-references
 RUN pnpm build:easter-egg-photos
 
