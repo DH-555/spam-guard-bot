@@ -5,12 +5,13 @@ import {
   PARANOIA_LEVELS,
   truncateText,
 } from "./detection.js";
+import { t } from "./i18n.js";
 import {
   assertSafeImageDimensions,
   downloadImage,
   getMessageImageSources,
 } from "./images.js";
-import { resolveLocale, t } from "./i18n.js";
+import { resolveLocale } from "./i18n.js";
 
 const REASON =
   "Image detected by moderation rules.";
@@ -28,9 +29,12 @@ async function findMatchingImage(
   config,
   ocrService,
   visualMatcher,
+  easterEggMatcher,
   paranoiaLevel,
 ) {
   const imageSources = getMessageImageSources(message);
+  const hasEasterEggMatcher =
+    easterEggMatcher && easterEggMatcher.references?.length > 0;
 
   for (const source of imageSources) {
     if (source.size !== null && source.size > config.maxImageBytes) {
@@ -53,6 +57,24 @@ async function findMatchingImage(
       const visualStartedAt = performance.now();
       const visualMatch = visualMatcher ? await visualMatcher.match(image) : null;
       const visualMs = performance.now() - visualStartedAt;
+
+      if (hasEasterEggMatcher) {
+        const easterEggStartedAt = performance.now();
+        const easterEggMatch = await easterEggMatcher.match(image);
+        const easterEggMs = performance.now() - easterEggStartedAt;
+
+        if (easterEggMatch) {
+          console.log(
+            `[Image analysis] ${source.label}: easter egg match "${easterEggMatch.reference.label}" ` +
+              `(download ${downloadMs.toFixed(0)} ms; hash ${easterEggMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
+          );
+          return {
+            source,
+            kind: "easterEgg",
+            easterEggMatch,
+          };
+        }
+      }
 
       if (visualMatch) {
         console.log(
@@ -78,7 +100,8 @@ async function findMatchingImage(
         });
         const ocrMs = performance.now() - ocrStartedAt;
         console.log(
-          `[Image analysis] ${source.label}: no visual match ` +
+          `[Image analysis] ${source.label}: ` +
+            "no visual match " +
             `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
             `OCR ${ocrMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
         );
@@ -129,6 +152,8 @@ async function sendModerationAlert(
           match.visualMatch.reference.label,
           match.visualMatch.distance,
         )
+      : match.kind === "easterEgg"
+        ? t(locale, "moderation", "easterEggMatch")
       : t(locale, "moderation", "ocrMatch");
   const embed = new EmbedBuilder()
     .setColor(0xed4245)
@@ -199,12 +224,20 @@ async function sendFallbackNotice(message, locale) {
   });
 }
 
+async function sendEasterEggReply(message, locale) {
+  await message.reply({
+    content: t(locale, "moderation", "easterEggReply"),
+    allowedMentions: { repliedUser: false },
+  });
+}
+
 export function createMessageHandler({
   client,
   config,
   ocrService,
   settingsStore,
   visualMatcher,
+  easterEggMatcher,
 }) {
   return async function handleMessage(message) {
     if (!message.inGuild() || message.author.bot || message.webhookId) {
@@ -256,10 +289,21 @@ export function createMessageHandler({
       config,
       ocrService,
       visualMatcher,
+      easterEggMatcher,
       paranoiaLevel,
     );
 
     if (!match) {
+      return;
+    }
+
+    if (match.kind === "easterEgg") {
+      try {
+        await sendEasterEggReply(message, locale);
+      } catch (error) {
+        console.error("[Moderation] Could not send the easter egg reply:", error);
+      }
+
       return;
     }
 

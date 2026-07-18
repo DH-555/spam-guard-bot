@@ -10,6 +10,11 @@ import {
   loadVisualReferenceManifest,
   writeVisualReferenceManifest,
 } from "../src/visual-matching.js";
+import {
+  buildEasterEggMatcher,
+  loadEasterEggPhotoManifest,
+  writeEasterEggPhotoManifest,
+} from "../src/easter-egg-matching.js";
 
 function createHorizontalGradient(width, height, reversed = false) {
   const pixels = Buffer.alloc(width * height * 3);
@@ -270,6 +275,115 @@ test("deletes the whole message when only one image matches", async () => {
     assert.equal(ocrCalls, 1);
     assert.equal(channelMessages.length, 1);
     assert.match(channelMessages[0].content, /Message deleted: <@user-1>/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("replies publicly and skips moderation for an easter egg hash match", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
+
+  try {
+    const tempDirectory = await mkdtemp(join(tmpdir(), "easter-egg-handler-"));
+    const referencePath = join(tempDirectory, "meme.png");
+    await sharp(imageBuffer).toFile(referencePath);
+    const manifestPath = join(tempDirectory, "manifest.json");
+    await writeEasterEggPhotoManifest(tempDirectory, manifestPath);
+    const references = await loadEasterEggPhotoManifest(manifestPath);
+    const easterEggMatcher = await buildEasterEggMatcher(references, 0);
+
+    let deleted = 0;
+    let timeoutCalls = 0;
+    const channelMessages = [];
+    const replies = [];
+    const message = {
+      id: "message-easter-egg",
+      guildId: "guild-1",
+      channelId: "channel-1",
+      author: {
+        id: "user-egg",
+        tag: "egg#0001",
+        bot: false,
+        displayAvatarURL: () => "https://example.com/avatar.png",
+        toString: () => "<@user-egg>",
+      },
+      channel: {
+        isTextBased: () => true,
+        isSendable: () => true,
+        send: async (payload) => {
+          channelMessages.push(payload);
+        },
+      },
+      reply: async (payload) => {
+        replies.push(payload);
+      },
+      guild: {
+        preferredLocale: "es-ES",
+        ownerId: "owner-1",
+      },
+      attachments: new Map([
+        [
+          "attachment-1",
+          {
+            id: "attachment-1",
+            name: "meme.png",
+            contentType: "image/png",
+            size: imageBuffer.length,
+            url: imageUrl("meme"),
+          },
+        ],
+      ]),
+      embeds: [],
+      messageSnapshots: new Map(),
+      member: {
+        moderatable: true,
+        permissions: {
+          has: () => false,
+        },
+        timeout: async () => {
+          timeoutCalls += 1;
+        },
+      },
+      delete: async () => {
+        deleted += 1;
+      },
+      webhookId: null,
+      inGuild: () => true,
+    };
+
+    const handleMessage = createMessageHandler({
+      client: {},
+      config: {
+        maxImageBytes: 1024,
+        maxImagePixels: 16_000_000,
+        imageDownloadTimeoutMs: 1000,
+        timeoutMs: 60_000,
+      },
+      ocrService: {
+        recognize: async () => "nothing useful",
+      },
+      settingsStore: {
+        getModerationChannelId: () => null,
+        getParanoiaLevel: () => "high",
+        getExcludedRoleIds: () => [],
+        getExcludedAdministrators: () => true,
+        getTimeoutMs: () => null,
+      },
+      easterEggMatcher,
+    });
+
+    await handleMessage(message);
+
+    assert.equal(replies.length, 1);
+    assert.equal(replies[0].content, "Jajaja, piqué.");
+    assert.deepEqual(replies[0].allowedMentions, {
+      repliedUser: false,
+    });
+    assert.equal(deleted, 0);
+    assert.equal(timeoutCalls, 0);
+    assert.equal(channelMessages.length, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }

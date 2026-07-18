@@ -11,6 +11,10 @@ import {
   loadVisualReferenceManifest,
 } from "./visual-matching.js";
 import {
+  buildEasterEggMatcher,
+  loadEasterEggPhotoManifest,
+} from "./easter-egg-matching.js";
+import {
   createSetupCommandHandler,
   registerSetupCommandForGuild,
   registerSetupCommands,
@@ -31,6 +35,16 @@ const visualMatcher = visualReferenceHashes.length > 0
       visualReferenceHashes,
       config.visualMatchThreshold,
       { maxImagePixels: config.maxImagePixels },
+  )
+  : null;
+const easterEggReferences = await loadEasterEggPhotoManifest(
+  config.easterEggPhotoManifestPath,
+);
+const easterEggMatcher = easterEggReferences.length > 0
+  ? await buildEasterEggMatcher(
+      easterEggReferences,
+      0,
+      { maxImagePixels: config.maxImagePixels },
     )
   : null;
 
@@ -41,6 +55,16 @@ if (visualReferenceHashes.length === 0) {
 } else if (visualReferenceHashes.length > 0) {
   console.log(
     `[Visual matching] Loaded ${visualReferenceHashes.length} reference hash(es).`,
+  );
+}
+
+if (easterEggReferences.length === 0) {
+  console.warn(
+    `[Easter eggs] No hash signatures found at ${config.easterEggPhotoManifestPath}.`,
+  );
+} else {
+  console.log(
+    `[Easter eggs] Loaded ${easterEggReferences.length} hash signature(s).`,
   );
 }
 
@@ -57,6 +81,7 @@ const handleMessage = createMessageHandler({
   ocrService,
   settingsStore,
   visualMatcher,
+  easterEggMatcher,
 });
 const handleSetupCommand = createSetupCommandHandler({ settingsStore, config });
 

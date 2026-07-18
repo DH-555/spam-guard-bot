@@ -81,6 +81,10 @@ export function loadConfig() {
       process.env.VISUAL_REFERENCE_MANIFEST_PATH?.trim() ||
         "generated/visual-reference-manifest.json",
     ),
+    easterEggPhotoManifestPath: resolve(
+      process.env.EASTER_EGG_PHOTO_MANIFEST_PATH?.trim() ||
+        "generated/easter-egg-photo-manifest.json",
+    ),
     visualMatchThreshold: readNonNegativeInteger("VISUAL_MATCH_THRESHOLD", 6),
     maxImagePixels: readPositiveInteger("MAX_IMAGE_PIXELS", 16_000_000),
     ocrEffort: normalizeOcrEffort(process.env.OCR_EFFORT || DEFAULT_OCR_EFFORT),

@@ -15,6 +15,8 @@ const STRINGS = {
       visualMatch: (label, distance) =>
         `Visual match: ${label} (distance ${distance})`,
       ocrMatch: "OCR keywords detected",
+      easterEggMatch: "Easter egg OCR match",
+      easterEggReply: "Hahaha I got it 😜",
       ocrSkipped: "(visual match, OCR skipped)",
       yes: "Yes",
       noPrefix: (reason) => `No: ${reason}`,
@@ -70,6 +72,8 @@ const STRINGS = {
       visualMatch: (label, distance) =>
         `Coincidencia visual: ${label} (distancia ${distance})`,
       ocrMatch: "Palabras clave detectadas por OCR",
+      easterEggMatch: "Coincidencia OCR del easter egg",
+      easterEggReply: "Jajaja, piqué.",
       ocrSkipped: "(coincidencia visual, OCR omitido)",
       yes: "Sí",
       noPrefix: (reason) => `No: ${reason}`,

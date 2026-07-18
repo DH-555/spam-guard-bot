@@ -57,6 +57,12 @@ withdrawal keyword and payout keyword, the entire outer message is
 deleted and the user who sent or forwarded it is timed out when Discord allows
 it.
 
+You can also add a public easter egg response by dropping meme images into
+`easter-egg photos/`. The bot builds hash signatures from that folder and, when
+one of those images is detected, replies in the channel with `Jajaja, piqué.`
+in Spanish or `Hahaha I got it 😜` in English instead of moderating the
+message.
+
 Discord may generate a link preview shortly after the original message is
 created. The bot handles both new-message and message-update events so those
 delayed previews are scanned as well. A plain link that Discord does not
@@ -158,6 +164,12 @@ Server administrators with **Manage Server** can configure the bot with:
 - `/setup excluded-role ...` to manage ignored roles.
 - `/setup excluded-administrators ...` to include or exclude server administrators.
 - `/setup status` to review the current configuration.
+
+### Easter eggs
+
+Store the meme images you want the bot to recognize in `easter-egg photos/`.
+Run `pnpm build:easter-egg-photos` to regenerate
+`generated/easter-egg-photo-manifest.json`.
 
 ## Docker
 
