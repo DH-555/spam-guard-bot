@@ -12,7 +12,7 @@ import {
   getMessageImageSources,
 } from "./images.js";
 import { resolveLocale } from "./i18n.js";
-import { RaidTracker } from "./raid-protection.js";
+import { getRaidFingerprint, RaidTracker } from "./raid-protection.js";
 
 const REASON =
   "Image detected by moderation rules.";
@@ -302,9 +302,10 @@ export function createMessageHandler({
     const locale = resolveLocale(message.guild);
 
     if (raid.enabled) {
+      const imageSources = getMessageImageSources(message);
       const raidEntries = raidTracker.record({
         guildId: message.guildId, userId: message.author.id, channelId: message.channelId,
-        content: message.content, message, level: raid.level,
+        content: message.content, fingerprint: getRaidFingerprint(message, imageSources), message, level: raid.level,
         requiredChannels: raid.level === "low"
           ? message.guild.channels.cache.filter((channel) => channel.isTextBased()).size
           : null,
