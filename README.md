@@ -118,7 +118,7 @@ Grant the bot these permissions:
 | Permission | Where it is required | Purpose |
 | --- | --- | --- |
 | **View Channels** | Monitored channels and the moderation channel | Receives new messages and accesses the configured moderation channel. |
-| **Manage Messages** | Monitored channels | Deletes messages containing a matching image. |
+| **Manage Messages** | Monitored channels | Deletes messages containing a matching image or raids. |
 | **Moderate Members** | Server-wide | Applies the configured timeout to the message author. |
 | **Send Messages** | Moderation channel | Sends moderation alerts. |
 | **Embed Links** | Moderation channel | Sends the formatted moderation report embed. |
