@@ -25,6 +25,9 @@ const STRINGS = {
         "The bot cannot apply a timeout because of permissions or role hierarchy.",
       fallbackNotice: (userMention) =>
         `Message deleted: ${userMention}. To receive alerts and detailed information, configure a moderation channel with \`/setup moderation-channel\`.`,
+      raidAlertTitle: "Anti-raid triggered",
+      raidAlertContent: (tag) => `Anti-raid alert: ${tag}`,
+      raidMessage: "Deleted repeated message",
     },
     setup: {
       onlyInServer: "This command can only be used inside a server.",
@@ -54,6 +57,8 @@ const STRINGS = {
       paranoiaMedium: "medium",
       paranoiaHigh: "high",
       paranoiaExtreme: "extreme",
+      antiRaidSaved: (enabled, level) => `Anti-raid is ${enabled ? "enabled" : "disabled"} at ${level} level.`,
+      currentAntiRaid: (enabled, level) => `Anti-raid: ${enabled ? "enabled" : "disabled"} (${level}).`,
     },
   },
   es: {
@@ -82,6 +87,9 @@ const STRINGS = {
         "El bot no puede aplicar una expulsión temporal por permisos o jerarquía de roles.",
       fallbackNotice: (userMention) =>
         `Mensaje borrado: ${userMention}. Para recibir alertas e información detallada, configura un canal de moderación con \`/setup moderation-channel\`.`,
+      raidAlertTitle: "Se activó la protección anti-raid",
+      raidAlertContent: (tag) => `Aviso anti-raid: ${tag}`,
+      raidMessage: "Mensaje repetido borrado",
     },
     setup: {
       onlyInServer: "Este comando solo puede usarse dentro de un servidor.",
@@ -116,6 +124,8 @@ const STRINGS = {
       paranoiaMedium: "medio",
       paranoiaHigh: "alto",
       paranoiaExtreme: "extremo",
+      antiRaidSaved: (enabled, level) => `La protección anti-raid está ${enabled ? "activada" : "desactivada"} en nivel ${level}.`,
+      currentAntiRaid: (enabled, level) => `Anti-raid: ${enabled ? "activada" : "desactivada"} (${level}).`,
     },
   },
 };

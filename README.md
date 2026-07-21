@@ -36,11 +36,39 @@ You can tune the detection sensitivity per server with `/setup paranoia`:
 
 The default paranoia level is `high`.
 
+## Anti-raid protection
+
+The bot includes an anti-raid protection that detects when a user sends the
+same message in multiple text channels within less than one minute. When a
+raid is detected, the bot:
+
+1. Deletes the repeated messages in the affected channels.
+2. Applies the configured timeout to the user.
+3. Sends an alert to the moderation channel, including the deleted message.
+
+Anti-raid is enabled by default at the `high` level. Configure it per server
+with `/setup anti-raid`, for example:
+
+```text
+/setup anti-raid enabled:true level:high
+```
+
+Available levels are:
+
+- `high` - triggers when the same message is sent in 3 or more channels.
+- `medium` - triggers when the same message is sent in 4 or more channels.
+- `low` - triggers only when the same message is sent in every text channel in
+  the server.
+
+Use `enabled:false` to disable the protection. The anti-raid configuration is
+stored separately for each server and is shown by `/setup status`.
+
 Server admins can also:
 
 - Set a custom timeout with `/setup timeout`.
 - Exclude roles from detection with `/setup excluded-role add`, `/setup excluded-role remove`, and `/setup excluded-role list`.
 - Toggle whether server administrators are excluded with `/setup excluded-administrators enable` and `/setup excluded-administrators disable`.
+- Enable, disable, or change the sensitivity of anti-raid protection with `/setup anti-raid`.
 
 For example, an image containing `Withdrawal` near the top and `Succeeded`
 near the bottom is considered a match.
@@ -163,6 +191,7 @@ Server administrators with **Manage Server** can configure the bot with:
 - `/setup timeout` to set the per-server timeout.
 - `/setup excluded-role ...` to manage ignored roles.
 - `/setup excluded-administrators ...` to include or exclude server administrators.
+- `/setup anti-raid` to enable or configure anti-raid protection.
 - `/setup status` to review the current configuration.
 
 ### Easter eggs

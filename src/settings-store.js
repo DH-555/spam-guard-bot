@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { normalizeParanoiaLevel } from "./detection.js";
+import { normalizeRaidLevel } from "./raid-protection.js";
 
 function normalizeRoleIds(value) {
   if (!Array.isArray(value)) {
@@ -65,6 +66,21 @@ export class SettingsStore {
   getTimeoutMs(guildId) {
     const timeoutMs = this.#settings[guildId]?.timeoutMs;
     return Number.isInteger(timeoutMs) && timeoutMs > 0 ? timeoutMs : null;
+  }
+
+  getRaidProtection(guildId) {
+    const settings = this.#settings[guildId];
+    return {
+      enabled: settings?.raidProtection?.enabled !== false,
+      level: normalizeRaidLevel(settings?.raidProtection?.level),
+    };
+  }
+
+  async setRaidProtection(guildId, enabled, level) {
+    this.#settings[guildId] = { ...this.#settings[guildId], raidProtection: {
+      enabled: Boolean(enabled), level: normalizeRaidLevel(level),
+    }};
+    await this.#save();
   }
 
   async setModerationChannelId(guildId, channelId) {

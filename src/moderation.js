@@ -12,6 +12,7 @@ import {
   getMessageImageSources,
 } from "./images.js";
 import { resolveLocale } from "./i18n.js";
+import { RaidTracker } from "./raid-protection.js";
 
 const REASON =
   "Image detected by moderation rules.";
@@ -224,6 +225,24 @@ async function sendFallbackNotice(message, locale) {
   });
 }
 
+async function sendRaidAlert(client, message, entries, timeoutMs, moderationChannelId, locale) {
+  if (!moderationChannelId) return sendFallbackNotice(message, locale);
+  const channel = await client.channels.fetch(moderationChannelId);
+  if (!channel?.isTextBased() || !channel.isSendable()) throw new Error("The configured moderation channel is unavailable.");
+  const deletedMessages = entries.map((entry) => `${entry.channelId}: ${entry.message.content || "(empty)"}`).join("\n");
+  await channel.send({
+    content: t(locale, "moderation", "raidAlertContent", message.author.tag),
+    embeds: [new EmbedBuilder().setColor(0xed4245).setTitle(t(locale, "moderation", "raidAlertTitle"))
+      .addFields(
+        { name: t(locale, "moderation", "user"), value: `${message.author} (\`${message.author.id}\`)` },
+        { name: t(locale, "moderation", "channel"), value: entries.map((entry) => `<#${entry.channelId}>`).join(", ") },
+        { name: t(locale, "moderation", "raidMessage"), value: truncateText(deletedMessages, 4000) },
+        { name: t(locale, "moderation", "timeout", Math.round(timeoutMs / 60_000)), value: "Applied" },
+      ).setTimestamp()],
+    allowedMentions: { parse: [] },
+  });
+}
+
 async function sendEasterEggReply(message, locale) {
   await message.reply({
     content: t(locale, "moderation", "easterEggReply"),
@@ -239,12 +258,9 @@ export function createMessageHandler({
   visualMatcher,
   easterEggMatcher,
 }) {
+  const raidTracker = new RaidTracker();
   return async function handleMessage(message) {
     if (!message.inGuild() || message.author.bot || message.webhookId) {
-      return;
-    }
-
-    if (getMessageImageSources(message).length === 0) {
       return;
     }
 
@@ -282,7 +298,27 @@ export function createMessageHandler({
     );
     const paranoiaLevel = settingsStore.getParanoiaLevel(message.guildId);
     const timeoutMs = settingsStore.getTimeoutMs(message.guildId) ?? config.timeoutMs;
+    const raid = settingsStore.getRaidProtection?.(message.guildId) ?? { enabled: true, level: "high" };
     const locale = resolveLocale(message.guild);
+
+    if (raid.enabled) {
+      const raidEntries = raidTracker.record({
+        guildId: message.guildId, userId: message.author.id, channelId: message.channelId,
+        content: message.content, message, level: raid.level,
+        requiredChannels: raid.level === "low"
+          ? message.guild.channels.cache.filter((channel) => channel.isTextBased()).size
+          : null,
+      });
+      if (raidEntries) {
+        const deleteResults = await Promise.allSettled(raidEntries.map((entry) => entry.message.delete()));
+        const timeoutResult = await Promise.allSettled([member.moderatable ? member.timeout(timeoutMs, "Anti-raid protection triggered.") : Promise.reject(new Error(t(locale, "moderation", "timeoutFailure")))]);
+        try { await sendRaidAlert(client, message, raidEntries, timeoutMs, moderationChannelId, locale); }
+        catch (error) { console.error("[Anti-raid] Could not send the notification:", error); }
+        return;
+      }
+    }
+
+    if (getMessageImageSources(message).length === 0) return;
 
     const match = await findMatchingImage(
       message,

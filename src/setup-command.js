@@ -6,6 +6,7 @@ import {
 } from "discord.js";
 import { PARANOIA_LEVELS, normalizeParanoiaLevel } from "./detection.js";
 import { resolveLocale, t } from "./i18n.js";
+import { RAID_LEVELS } from "./raid-protection.js";
 
 const setupCommand = new SlashCommandBuilder()
   .setName("setup")
@@ -24,6 +25,10 @@ const setupCommand = new SlashCommandBuilder()
           .setRequired(true),
       ),
   )
+  .addSubcommand((subcommand) => subcommand.setName("anti-raid").setDescription("Enable or configure anti-raid protection.")
+    .addBooleanOption((option) => option.setName("enabled").setDescription("Whether anti-raid is enabled.").setRequired(true))
+    .addStringOption((option) => option.setName("level").setDescription("Sensitivity level.").setRequired(true)
+      .addChoices({ name: "high", value: RAID_LEVELS.HIGH }, { name: "medium", value: RAID_LEVELS.MEDIUM }, { name: "low", value: RAID_LEVELS.LOW })))
   .addSubcommand((subcommand) =>
     subcommand
       .setName("paranoia")
@@ -236,6 +241,14 @@ export function createSetupCommandHandler({ settingsStore, config }) {
       return;
     }
 
+    if (subcommand === "anti-raid") {
+      const enabled = interaction.options.getBoolean("enabled", true);
+      const level = interaction.options.getString("level", true);
+      await settingsStore.setRaidProtection(interaction.guildId, enabled, level);
+      await interaction.reply({ content: t(locale, "setup", "antiRaidSaved", enabled, level), flags: MessageFlags.Ephemeral });
+      return;
+    }
+
     if (subcommandGroup === "excluded-role") {
       const role = interaction.options.getRole("role", subcommand !== "list");
 
@@ -302,6 +315,7 @@ export function createSetupCommandHandler({ settingsStore, config }) {
     const excludedRoleIds = settingsStore.getExcludedRoleIds(interaction.guildId);
     const excludedAdministrators =
       settingsStore.getExcludedAdministrators(interaction.guildId);
+    const raid = settingsStore.getRaidProtection(interaction.guildId);
     await interaction.reply({
       content: [
         channelId
@@ -315,6 +329,7 @@ export function createSetupCommandHandler({ settingsStore, config }) {
           "currentExcludedRoles",
           formatExcludedRoles(interaction, excludedRoleIds, excludedAdministrators),
         ),
+        t(locale, "setup", "currentAntiRaid", raid.enabled, raid.level),
       ].join("\n"),
       flags: MessageFlags.Ephemeral,
     });
