@@ -76,6 +76,18 @@ export class SettingsStore {
     };
   }
 
+  getSpamProtection(guildId) {
+    return { enabled: this.#settings[guildId]?.spamProtection?.enabled !== false };
+  }
+
+  async setSpamProtection(guildId, enabled) {
+    this.#settings[guildId] = {
+      ...this.#settings[guildId],
+      spamProtection: { enabled: Boolean(enabled) },
+    };
+    await this.#save();
+  }
+
   async setRaidProtection(guildId, enabled, level) {
     this.#settings[guildId] = { ...this.#settings[guildId], raidProtection: {
       enabled: Boolean(enabled), level: normalizeRaidLevel(level),

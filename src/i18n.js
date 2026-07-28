@@ -28,6 +28,9 @@ const STRINGS = {
       raidAlertTitle: "Anti-raid triggered",
       raidAlertContent: (tag) => `Anti-raid alert: ${tag}`,
       raidMessage: "Deleted repeated message",
+      spamAlertTitle: "Spam message blocked",
+      spamAlertContent: (tag) => `Spam alert: ${tag}`,
+      spamMessage: "Spam message",
     },
     setup: {
       onlyInServer: "This command can only be used inside a server.",
@@ -59,6 +62,8 @@ const STRINGS = {
       paranoiaExtreme: "extreme",
       antiRaidSaved: (enabled, level) => `Anti-raid is ${enabled ? "enabled" : "disabled"} at ${level} level.`,
       currentAntiRaid: (enabled, level) => `Anti-raid: ${enabled ? "enabled" : "disabled"} (${level}).`,
+      spamSaved: (enabled) => `Spam message protection is now ${enabled ? "enabled" : "disabled"}.`,
+      currentSpam: (enabled) => `Spam message protection: ${enabled ? "enabled" : "disabled"}.`,
     },
   },
   es: {
@@ -90,6 +95,9 @@ const STRINGS = {
       raidAlertTitle: "Se activó la protección anti-raid",
       raidAlertContent: (tag) => `Aviso anti-raid: ${tag}`,
       raidMessage: "Mensaje repetido borrado",
+      spamAlertTitle: "Se bloqueó un mensaje de spam",
+      spamAlertContent: (tag) => `Aviso de spam: ${tag}`,
+      spamMessage: "Mensaje de spam",
     },
     setup: {
       onlyInServer: "Este comando solo puede usarse dentro de un servidor.",
@@ -126,6 +134,8 @@ const STRINGS = {
       paranoiaExtreme: "extremo",
       antiRaidSaved: (enabled, level) => `La protección anti-raid está ${enabled ? "activada" : "desactivada"} en nivel ${level}.`,
       currentAntiRaid: (enabled, level) => `Anti-raid: ${enabled ? "activada" : "desactivada"} (${level}).`,
+      spamSaved: (enabled) => `La protección de mensajes de spam está ${enabled ? "activada" : "desactivada"}.`,
+      currentSpam: (enabled) => `Protección de mensajes de spam: ${enabled ? "activada" : "desactivada"}.`,
     },
   },
 };

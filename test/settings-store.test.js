@@ -20,6 +20,8 @@ test("stores moderation channels separately for each guild", async () => {
   await store.addExcludedRoleId("guild-1", "role-2");
   await store.addExcludedRoleId("guild-1", "role-1");
   assert.equal(store.getExcludedAdministrators("guild-1"), true);
+  await store.setSpamProtection("guild-1", false);
+  assert.deepEqual(store.getSpamProtection("guild-1"), { enabled: false });
 
   assert.equal(store.getModerationChannelId("guild-1"), "channel-1");
   assert.equal(store.getModerationChannelId("guild-2"), "channel-2");
@@ -34,6 +36,7 @@ test("stores moderation channels separately for each guild", async () => {
   assert.equal(savedSettings["guild-1"].timeoutMs, 5 * 60_000);
   assert.deepEqual(savedSettings["guild-1"].excludedRoleIds, ["role-1", "role-2"]);
   assert.equal(savedSettings["guild-1"].excludedAdministrators, undefined);
+  assert.equal(savedSettings["guild-1"].spamProtection.enabled, false);
 });
 
 test("loads previously saved settings", async () => {
@@ -56,6 +59,7 @@ test("loads previously saved settings", async () => {
   assert.equal(secondStore.getTimeoutMs("guild-1"), 15 * 60_000);
   assert.deepEqual(secondStore.getExcludedRoleIds("guild-1"), ["role-1"]);
   assert.equal(secondStore.getExcludedAdministrators("guild-1"), false);
+  assert.deepEqual(secondStore.getSpamProtection("guild-1"), { enabled: true });
   assert.equal(secondStore.getModerationChannelId("unknown"), null);
   assert.equal(secondStore.getParanoiaLevel("unknown"), "high");
   assert.equal(secondStore.getTimeoutMs("unknown"), null);

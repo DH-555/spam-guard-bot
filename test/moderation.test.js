@@ -161,6 +161,63 @@ test("moderates and posts a fallback notice when no moderation channel is config
   }
 });
 
+test("blocks a listed spam message without requiring an image", async () => {
+  const channelMessages = [];
+  let deleted = 0;
+  let timeoutCalls = 0;
+  const message = {
+    id: "spam-message-1",
+    guildId: "guild-1",
+    channelId: "channel-1",
+    content: "FREE CRYPTO GIVEAWAY!  Send crypto to receive double back.",
+    author: {
+      id: "user-spammer",
+      tag: "spammer#0001",
+      bot: false,
+      displayAvatarURL: () => "https://example.com/avatar.png",
+      toString: () => "<@user-spammer>",
+    },
+    channel: {
+      isTextBased: () => true,
+      isSendable: () => true,
+      send: async (payload) => channelMessages.push(payload),
+    },
+    guild: { preferredLocale: "en-US", ownerId: "owner-1" },
+    attachments: new Map(),
+    embeds: [],
+    messageSnapshots: new Map(),
+    member: {
+      moderatable: true,
+      permissions: { has: () => false },
+      timeout: async () => { timeoutCalls += 1; },
+    },
+    delete: async () => { deleted += 1; },
+    webhookId: null,
+    inGuild: () => true,
+  };
+
+  const handleMessage = createMessageHandler({
+    client: {},
+    config: { timeoutMs: 60_000 },
+    ocrService: { recognize: async () => "" },
+    settingsStore: {
+      getModerationChannelId: () => null,
+      getParanoiaLevel: () => "high",
+      getExcludedRoleIds: () => [],
+      getExcludedAdministrators: () => true,
+      getTimeoutMs: () => null,
+      getSpamProtection: () => ({ enabled: true }),
+    },
+  });
+
+  await handleMessage(message);
+
+  assert.equal(deleted, 1);
+  assert.equal(timeoutCalls, 1);
+  assert.equal(channelMessages.length, 1);
+  assert.match(channelMessages[0].content, /Message deleted: <@user-spammer>/);
+});
+
 test("deletes the whole message when only one image matches", async () => {
   const originalFetch = globalThis.fetch;
 

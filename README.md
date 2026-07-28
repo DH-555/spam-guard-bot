@@ -60,6 +60,23 @@ Available levels are:
 - `low` - triggers only when the same message is sent in every text channel in
   the server.
 
+## Spam message protection
+
+The bot can also block text messages that contain an entry from the list in
+`spam-messages.json`. Matching ignores capitalization, accents, and repeated
+spaces. Matching messages are deleted, the author is timed out, and a
+moderation alert is sent when a moderation channel is configured.
+
+Spam protection is enabled by default. Server administrators can toggle it with:
+
+```text
+/setup spam messages enabled:false
+/setup spam messages enabled:true
+```
+
+Add or remove entries directly in `spam-messages.json`, one message or phrase
+per JSON array entry. Its status is also shown by `/setup status`.
+
 Use `enabled:false` to disable the protection. The anti-raid configuration is
 stored separately for each server and is shown by `/setup status`.
 

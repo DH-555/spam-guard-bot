@@ -13,6 +13,7 @@ import {
 } from "./images.js";
 import { resolveLocale } from "./i18n.js";
 import { getRaidFingerprint, RaidTracker } from "./raid-protection.js";
+import { findSpamMessage } from "./spam-messages.js";
 
 const REASON =
   "Image detected by moderation rules.";
@@ -250,6 +251,31 @@ async function sendEasterEggReply(message, locale) {
   });
 }
 
+async function sendSpamAlert(client, message, spamMessage, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale) {
+  if (!moderationChannelId) {
+    await sendFallbackNotice(message, locale);
+    return;
+  }
+
+  const channel = await client.channels.fetch(moderationChannelId);
+  if (!channel?.isTextBased() || !channel.isSendable()) {
+    throw new Error("The configured moderation channel is unavailable or cannot receive messages.");
+  }
+
+  await channel.send({
+    content: t(locale, "moderation", "spamAlertContent", message.author.tag),
+    embeds: [new EmbedBuilder().setColor(0xed4245).setTitle(t(locale, "moderation", "spamAlertTitle"))
+      .addFields(
+        { name: t(locale, "moderation", "user"), value: `${message.author} (\`${message.author.id}\`)` },
+        { name: t(locale, "moderation", "channel"), value: `${message.channel} (\`${message.channelId}\`)` },
+        { name: t(locale, "moderation", "spamMessage"), value: truncateText(`Matched: ${spamMessage}\nContent: ${message.content}`) },
+        { name: t(locale, "moderation", "timeout", Math.round(timeoutMs / 60_000)), value: resultLabel(timeoutResult, locale), inline: true },
+        { name: t(locale, "moderation", "messageDeleted"), value: resultLabel(deleteResult, locale), inline: true },
+      ).setTimestamp()],
+    allowedMentions: { parse: [] },
+  });
+}
+
 export function createMessageHandler({
   client,
   config,
@@ -299,6 +325,7 @@ export function createMessageHandler({
     const paranoiaLevel = settingsStore.getParanoiaLevel(message.guildId);
     const timeoutMs = settingsStore.getTimeoutMs(message.guildId) ?? config.timeoutMs;
     const raid = settingsStore.getRaidProtection?.(message.guildId) ?? { enabled: true, level: "high" };
+    const spam = settingsStore.getSpamProtection?.(message.guildId) ?? { enabled: true };
     const locale = resolveLocale(message.guild);
 
     if (raid.enabled) {
@@ -317,6 +344,24 @@ export function createMessageHandler({
         catch (error) { console.error("[Anti-raid] Could not send the notification:", error); }
         return;
       }
+    }
+
+    const spamMessage = spam.enabled ? findSpamMessage(message.content) : null;
+    if (spamMessage) {
+      const deletePromise = Promise.resolve().then(() => message.delete());
+      const timeoutPromise = Promise.resolve().then(async () => {
+        if (!member.moderatable) {
+          throw new Error(t(locale, "moderation", "timeoutFailure"));
+        }
+        return member.timeout(timeoutMs, "Spam message protection triggered.");
+      });
+      const [deleteResult, timeoutResult] = await Promise.allSettled([deletePromise, timeoutPromise]);
+      try {
+        await sendSpamAlert(client, message, spamMessage, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale);
+      } catch (error) {
+        console.error("[Spam protection] Could not send the notification:", error);
+      }
+      return;
     }
 
     if (getMessageImageSources(message).length === 0) return;

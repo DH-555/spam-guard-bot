@@ -29,6 +29,22 @@ const setupCommand = new SlashCommandBuilder()
     .addBooleanOption((option) => option.setName("enabled").setDescription("Whether anti-raid is enabled.").setRequired(true))
     .addStringOption((option) => option.setName("level").setDescription("Sensitivity level.").setRequired(true)
       .addChoices({ name: "high", value: RAID_LEVELS.HIGH }, { name: "medium", value: RAID_LEVELS.MEDIUM }, { name: "low", value: RAID_LEVELS.LOW })))
+  .addSubcommandGroup((group) =>
+    group
+      .setName("spam")
+      .setDescription("Manage spam message protection.")
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("messages")
+          .setDescription("Enable or disable spam message protection.")
+          .addBooleanOption((option) =>
+            option
+              .setName("enabled")
+              .setDescription("Whether spam message protection is enabled.")
+              .setRequired(true),
+          ),
+      ),
+  )
   .addSubcommand((subcommand) =>
     subcommand
       .setName("paranoia")
@@ -249,6 +265,13 @@ export function createSetupCommandHandler({ settingsStore, config }) {
       return;
     }
 
+    if (subcommandGroup === "spam" && subcommand === "messages") {
+      const enabled = interaction.options.getBoolean("enabled", true);
+      await settingsStore.setSpamProtection(interaction.guildId, enabled);
+      await interaction.reply({ content: t(locale, "setup", "spamSaved", enabled), flags: MessageFlags.Ephemeral });
+      return;
+    }
+
     if (subcommandGroup === "excluded-role") {
       const role = interaction.options.getRole("role", subcommand !== "list");
 
@@ -316,6 +339,7 @@ export function createSetupCommandHandler({ settingsStore, config }) {
     const excludedAdministrators =
       settingsStore.getExcludedAdministrators(interaction.guildId);
     const raid = settingsStore.getRaidProtection(interaction.guildId);
+    const spam = settingsStore.getSpamProtection?.(interaction.guildId) ?? { enabled: true };
     await interaction.reply({
       content: [
         channelId
@@ -330,6 +354,7 @@ export function createSetupCommandHandler({ settingsStore, config }) {
           formatExcludedRoles(interaction, excludedRoleIds, excludedAdministrators),
         ),
         t(locale, "setup", "currentAntiRaid", raid.enabled, raid.level),
+        t(locale, "setup", "currentSpam", spam.enabled),
       ].join("\n"),
       flags: MessageFlags.Ephemeral,
     });
