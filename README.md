@@ -75,7 +75,9 @@ Spam protection is enabled by default. Server administrators can toggle it with:
 ```
 
 Add or remove entries directly in `spam-messages.json`, one message or phrase
-per JSON array entry. Its status is also shown by `/setup status`.
+per JSON array entry. Multi-line messages can be pasted with their line breaks
+as-is; the bot accepts and normalizes those line breaks when it loads the file.
+Its status is also shown by `/setup status`.
 
 Use `enabled:false` to disable the protection. The anti-raid configuration is
 stored separately for each server and is shown by `/setup status`.
