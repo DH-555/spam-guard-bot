@@ -167,7 +167,8 @@ completely. Use `/setup excluded-administrators disable` to scan them too. When
 administrator exclusion is disabled, Discord may still prevent the timeout, but
 the bot can still delete matching messages when it has permission.
 
-Members with an excluded role are also ignored completely.
+Members with an excluded role are also ignored completely. These exclusions
+apply to image moderation, anti-raid protection, and spam message protection.
 
 ### Administrator permissions
 

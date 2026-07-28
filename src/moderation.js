@@ -276,6 +276,22 @@ async function sendSpamAlert(client, message, spamMessage, timeoutResult, delete
   });
 }
 
+function shouldIgnoreMember(message, member, settingsStore) {
+  const excludedRoleIds = settingsStore.getExcludedRoleIds(message.guildId);
+  const excludedAdministrators =
+    settingsStore.getExcludedAdministrators(message.guildId);
+  const hasAdministratorBypass =
+    message.guild.ownerId === message.author.id ||
+    member.permissions.has(PermissionFlagsBits.Administrator);
+  const hasExcludedRole = excludedRoleIds.some((roleId) =>
+    member.roles?.cache?.has?.(roleId),
+  );
+
+  return (
+    (excludedAdministrators && hasAdministratorBypass) || hasExcludedRole
+  );
+}
+
 export function createMessageHandler({
   client,
   config,
@@ -289,10 +305,6 @@ export function createMessageHandler({
     if (!message.inGuild() || message.author.bot || message.webhookId) {
       return;
     }
-
-    const excludedRoleIds = settingsStore.getExcludedRoleIds(message.guildId);
-    const excludedAdministrators =
-      settingsStore.getExcludedAdministrators(message.guildId);
 
     let member = message.member;
 
@@ -308,14 +320,7 @@ export function createMessageHandler({
       }
     }
 
-    const hasAdministratorBypass =
-      message.guild.ownerId === message.author.id ||
-      member.permissions.has(PermissionFlagsBits.Administrator);
-    const hasExcludedRole = excludedRoleIds.some((roleId) =>
-      member.roles?.cache?.has?.(roleId),
-    );
-
-    if ((excludedAdministrators && hasAdministratorBypass) || hasExcludedRole) {
+    if (shouldIgnoreMember(message, member, settingsStore)) {
       return;
     }
 
