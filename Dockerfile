@@ -29,6 +29,7 @@ WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=manifests /app/generated ./generated
 COPY package.json ./
+COPY spam-messages.json ./spam-messages.json
 COPY src ./src
 
 RUN mkdir -p /app/data /app/tessdata \
