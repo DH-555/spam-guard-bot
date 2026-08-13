@@ -15,7 +15,7 @@ import { resolveLocale } from "./i18n.js";
 import { createInviteResolver, findMaliciousInvite } from "./invite-protection.js";
 import { findNsfwInvite, NSFW_SERVER_KEYWORDS } from "./nsfw-servers.js";
 import { getRaidFingerprint, RaidTracker } from "./raid-protection.js";
-import { findSpamMessage } from "./spam-messages.js";
+import { findSpamMessage, getSpamText } from "./spam-messages.js";
 
 const REASON =
   "Image detected by moderation rules.";
@@ -516,7 +516,8 @@ export function createMessageHandler({
       }
     }
 
-    const spamMessage = spam.enabled ? findSpamMessage(message.content) : null;
+    const spamText = getSpamText(message);
+    const spamMessage = spam.enabled ? findSpamMessage(spamText) : null;
     if (spamMessage) {
       const deletePromise = Promise.resolve().then(() => message.delete());
       const timeoutPromise = Promise.resolve().then(async () => {

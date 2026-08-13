@@ -41,12 +41,12 @@ function escapeLiteralControlCharactersInStrings(source) {
   return result;
 }
 
-const spamMessages = JSON.parse(
+const spamConfig = JSON.parse(
   escapeLiteralControlCharactersInStrings(readFileSync(spamMessagesPath, "utf8")),
 );
 
 // Matching is case-insensitive and ignores accents and repeated whitespace.
-export const SPAM_MESSAGES = Object.freeze(spamMessages);
+export const SPAM_MESSAGES = Object.freeze(spamConfig);
 
 export function normalizeSpamText(value) {
   return typeof value === "string"
@@ -61,7 +61,15 @@ export function findSpamMessage(content, spamMessages = SPAM_MESSAGES) {
     return null;
   }
 
-  for (const spamMessage of spamMessages) {
+  const messages = Array.isArray(spamMessages) ? spamMessages : spamMessages.messages;
+  const descriptionPatterns = Array.isArray(spamMessages)
+    ? []
+    : spamMessages.descriptionPatterns ?? [];
+  const descriptionExclusions = Array.isArray(spamMessages)
+    ? []
+    : spamMessages.descriptionExclusions ?? [];
+
+  for (const spamMessage of messages ?? []) {
     const normalizedSpamMessage = normalizeSpamText(spamMessage);
 
     if (normalizedSpamMessage && normalizedContent.includes(normalizedSpamMessage)) {
@@ -69,5 +77,36 @@ export function findSpamMessage(content, spamMessages = SPAM_MESSAGES) {
     }
   }
 
+  if (descriptionExclusions.some((pattern) => new RegExp(pattern, "u").test(normalizedContent))) {
+    return null;
+  }
+
+  const matchedPattern = descriptionPatterns.find((pattern) =>
+    new RegExp(pattern, "u").test(normalizedContent),
+  );
+
+  if (matchedPattern) {
+    return `Pattern: ${matchedPattern}`;
+  }
+
   return null;
+}
+
+export function getSpamText(message) {
+  const parts = [message?.content ?? ""];
+
+  function collectDescriptions(currentMessage) {
+    for (const embed of currentMessage?.embeds ?? []) {
+      if (embed.description) {
+        parts.push(embed.description);
+      }
+    }
+
+    for (const snapshot of currentMessage?.messageSnapshots?.values?.() ?? []) {
+      collectDescriptions(snapshot);
+    }
+  }
+
+  collectDescriptions(message);
+  return parts.filter(Boolean).join("\n");
 }

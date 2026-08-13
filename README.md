@@ -62,10 +62,11 @@ Available levels are:
 
 ## Spam message protection
 
-The bot can also block text messages that contain an entry from the list in
-`spam-messages.json`. Matching ignores capitalization, accents, and repeated
-spaces. Matching messages are deleted, the author is timed out, and a
-moderation alert is sent when a moderation channel is configured.
+The bot can also block text messages or embed descriptions that contain an
+entry from the list in `spam-messages.json`. Matching ignores capitalization,
+accents, and repeated spaces. Matching messages are deleted, the author is
+timed out, and a moderation alert is sent when a moderation channel is
+configured.
 
 Spam protection is enabled by default. Server administrators can toggle it with:
 
@@ -74,10 +75,13 @@ Spam protection is enabled by default. Server administrators can toggle it with:
 /setup spam messages enabled:true
 ```
 
-Add or remove entries directly in `spam-messages.json`, one message or phrase
-per JSON array entry. Multi-line messages can be pasted with their line breaks
-as-is; the bot accepts and normalizes those line breaks when it loads the file.
-Its status is also shown by `/setup status`.
+Add or remove entries directly in the `messages` array in `spam-messages.json`,
+one message or phrase per JSON array entry. Multi-line messages can be pasted
+with their line breaks as-is; the bot accepts and normalizes those line breaks
+when it loads the file. The `descriptionPatterns` entries are regular
+expressions for promotional descriptions. They are ignored when a
+`descriptionExclusions` expression detects a negation such as `no NSFW` or
+`NSFW not allowed`. Its status is also shown by `/setup status`.
 
 Use `enabled:false` to disable the protection. The anti-raid configuration is
 stored separately for each server and is shown by `/setup status`.

@@ -1,4 +1,5 @@
-[
+{
+  "messages": [
   "Congratulations! You have won a prize. Click here to claim it.",
   "You have been selected to receive a reward. Contact us now.",
   "Free crypto giveaway! Send crypto to receive double back.",
@@ -14,4 +15,15 @@
 • 4–8 months old – 2 SOL
 • 1 year+ – 5 SOL+ (More for higher activity or older age)",
   "as I am software engineer, if someone need me, let me know. let's discuss more detail. but if you wanna hire me, you have to pay."
-]
+],
+  "descriptionPatterns": [
+    "\\bnsfw\\s+(?:content|gifs?|memes?)\\b",
+    "\\badult\\s+nsfw\\b",
+    "\\b(?:porn|hentai|xxx|onlyfans)\\s+(?:content|gifs?|memes?|collection|server)\\b"
+  ],
+  "descriptionExclusions": [
+    "\\b(?:no|without)\\s+nsfw\\b",
+    "\\bnsfw\\s+(?:(?:is\\s+)?not\\s+allowed|prohibited|forbidden|banned)\\b",
+    "\\bnsfw\\s+(?:content|gifs?|memes?)\\s+(?:(?:is\\s+)?not\\s+allowed|prohibited|forbidden|banned)\\b"
+  ]
+}
