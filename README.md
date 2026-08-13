@@ -82,6 +82,61 @@ Its status is also shown by `/setup status`.
 Use `enabled:false` to disable the protection. The anti-raid configuration is
 stored separately for each server and is shown by `/setup status`.
 
+## Malicious server invite protection
+
+The bot can resolve Discord invitation links and compare the destination
+server ID with a blocklist. This protection is enabled by default.
+When a message contains an invitation to a blocked server, the bot deletes the
+message, applies the configured timeout to the author, and sends a moderation
+alert. A new invite link to the same server is still blocked because matching
+uses the destination server ID, not the invite code.
+
+The global blocklist is [malicious-servers.json](malicious-servers.json) at the
+repository root. Add one Discord server ID per JSON array entry:
+
+```json
+[
+  "123456789012345678",
+  "987654321098765432"
+]
+```
+
+The file is copied into the Docker image. Rebuild/redeploy the image after
+changing it. The `/setup malicious-servers add` command can also add a local
+entry for the current server without modifying the repository file.
+
+Manage it with:
+
+```text
+/setup malicious-servers protection enabled:true
+/setup malicious-servers add server-id:123456789012345678
+/setup malicious-servers remove server-id:123456789012345678
+/setup malicious-servers list
+```
+
+The enabled/disabled state and local entries are stored separately for each
+server and are shown in `/setup status`. Expired, deleted, or otherwise
+unavailable invites cannot be resolved and are left untouched.
+
+## NSFW server invite protection
+
+The bot can also inspect the name returned for an invitation's destination
+server. It compares that name against the keywords in
+[nsfw-server-keywords.json](nsfw-server-keywords.json), including terms such as
+`NSFW`, `+18`, `18+`, `🔞`, `squirt`, `sex`, `porn`, `xxx`, `adult`, `hentai`,
+and `onlyfans`. Matching is case-insensitive and ignores accents.
+
+This protection is enabled by default and can be disabled per server with:
+
+```text
+/setup nsfw-servers protection enabled:false
+/setup nsfw-servers protection enabled:true
+```
+
+The keyword file is copied into the Docker image, so rebuild/redeploy the image
+after changing it. If the invitation has expired, is unavailable, or does not
+expose a server name, the NSFW-name check is skipped.
+
 Server admins can also:
 
 - Set a custom timeout with `/setup timeout`.

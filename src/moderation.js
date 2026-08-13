@@ -12,6 +12,8 @@ import {
   getMessageImageSources,
 } from "./images.js";
 import { resolveLocale } from "./i18n.js";
+import { createInviteResolver, findMaliciousInvite } from "./invite-protection.js";
+import { findNsfwInvite, NSFW_SERVER_KEYWORDS } from "./nsfw-servers.js";
 import { getRaidFingerprint, RaidTracker } from "./raid-protection.js";
 import { findSpamMessage } from "./spam-messages.js";
 
@@ -276,6 +278,81 @@ async function sendSpamAlert(client, message, spamMessage, timeoutResult, delete
   });
 }
 
+async function sendMaliciousServerAlert(
+  client,
+  message,
+  maliciousInvite,
+  timeoutResult,
+  deleteResult,
+  timeoutMs,
+  moderationChannelId,
+  locale,
+) {
+  if (!moderationChannelId) {
+    await sendFallbackNotice(message, locale);
+    return;
+  }
+
+  const channel = await client.channels.fetch(moderationChannelId);
+  if (!channel?.isTextBased() || !channel.isSendable()) {
+    throw new Error("The configured moderation channel is unavailable or cannot receive messages.");
+  }
+
+  await channel.send({
+    content: t(locale, "moderation", "maliciousServerAlertContent", message.author.tag),
+    embeds: [new EmbedBuilder().setColor(0xed4245).setTitle(t(locale, "moderation", "maliciousServerAlertTitle"))
+      .addFields(
+        { name: t(locale, "moderation", "user"), value: `${message.author} (\`${message.author.id}\`)` },
+        { name: t(locale, "moderation", "channel"), value: `${message.channel} (\`${message.channelId}\`)` },
+        { name: t(locale, "moderation", "maliciousServer"), value: `\`${maliciousInvite.guildId}\`` },
+        { name: t(locale, "moderation", "inviteCode"), value: `\`${maliciousInvite.code}\``, inline: true },
+        { name: t(locale, "moderation", "timeout", Math.round(timeoutMs / 60_000)), value: resultLabel(timeoutResult, locale), inline: true },
+        { name: t(locale, "moderation", "messageDeleted"), value: resultLabel(deleteResult, locale), inline: true },
+      )
+      .addFields({ name: t(locale, "moderation", "message"), value: truncateText(message.content) })
+      .setTimestamp()],
+    allowedMentions: { parse: [] },
+  });
+}
+
+async function sendNsfwServerAlert(
+  client,
+  message,
+  nsfwInvite,
+  timeoutResult,
+  deleteResult,
+  timeoutMs,
+  moderationChannelId,
+  locale,
+) {
+  if (!moderationChannelId) {
+    await sendFallbackNotice(message, locale);
+    return;
+  }
+
+  const channel = await client.channels.fetch(moderationChannelId);
+  if (!channel?.isTextBased() || !channel.isSendable()) {
+    throw new Error("The configured moderation channel is unavailable or cannot receive messages.");
+  }
+
+  await channel.send({
+    content: t(locale, "moderation", "nsfwServerAlertContent", message.author.tag),
+    embeds: [new EmbedBuilder().setColor(0xed4245).setTitle(t(locale, "moderation", "nsfwServerAlertTitle"))
+      .addFields(
+        { name: t(locale, "moderation", "user"), value: `${message.author} (\`${message.author.id}\`)` },
+        { name: t(locale, "moderation", "channel"), value: `${message.channel} (\`${message.channelId}\`)` },
+        { name: t(locale, "moderation", "serverName"), value: truncateText(nsfwInvite.guildName || t(locale, "moderation", "unknown")) },
+        { name: t(locale, "moderation", "matchedKeyword"), value: `\`${nsfwInvite.keyword}\``, inline: true },
+        { name: t(locale, "moderation", "serverId"), value: `\`${nsfwInvite.guildId}\``, inline: true },
+        { name: t(locale, "moderation", "inviteCode"), value: `\`${nsfwInvite.code}\``, inline: true },
+        { name: t(locale, "moderation", "timeout", Math.round(timeoutMs / 60_000)), value: resultLabel(timeoutResult, locale), inline: true },
+        { name: t(locale, "moderation", "messageDeleted"), value: resultLabel(deleteResult, locale), inline: true },
+      )
+      .setTimestamp()],
+    allowedMentions: { parse: [] },
+  });
+}
+
 function shouldIgnoreMember(message, member, settingsStore) {
   const excludedRoleIds = settingsStore.getExcludedRoleIds(message.guildId);
   const excludedAdministrators =
@@ -299,8 +376,11 @@ export function createMessageHandler({
   settingsStore,
   visualMatcher,
   easterEggMatcher,
+  maliciousGuildIds = [],
+  nsfwServerKeywords = NSFW_SERVER_KEYWORDS,
 }) {
   const raidTracker = new RaidTracker();
+  const resolveInvite = createInviteResolver(client);
   return async function handleMessage(message) {
     if (!message.inGuild() || message.author.bot || message.webhookId) {
       return;
@@ -331,7 +411,92 @@ export function createMessageHandler({
     const timeoutMs = settingsStore.getTimeoutMs(message.guildId) ?? config.timeoutMs;
     const raid = settingsStore.getRaidProtection?.(message.guildId) ?? { enabled: true, level: "high" };
     const spam = settingsStore.getSpamProtection?.(message.guildId) ?? { enabled: true };
+    const maliciousServer = settingsStore.getMaliciousServerProtection?.(message.guildId) ?? {
+      enabled: true,
+      blockedGuildIds: [],
+    };
+    const nsfwServer = settingsStore.getNsfwServerProtection?.(message.guildId) ?? {
+      enabled: true,
+    };
     const locale = resolveLocale(message.guild);
+
+    if (maliciousServer.enabled) {
+      const maliciousInvite = await findMaliciousInvite(
+        message.content,
+        [...maliciousGuildIds, ...maliciousServer.blockedGuildIds],
+        resolveInvite,
+      );
+
+      if (maliciousInvite) {
+        const deletePromise = Promise.resolve().then(() => message.delete());
+        const timeoutPromise = Promise.resolve().then(async () => {
+          if (!member.moderatable) {
+            throw new Error(t(locale, "moderation", "timeoutFailure"));
+          }
+
+          return member.timeout(timeoutMs, "Malicious server invite protection triggered.");
+        });
+        const [deleteResult, timeoutResult] = await Promise.allSettled([
+          deletePromise,
+          timeoutPromise,
+        ]);
+
+        try {
+          await sendMaliciousServerAlert(
+            client,
+            message,
+            maliciousInvite,
+            timeoutResult,
+            deleteResult,
+            timeoutMs,
+            moderationChannelId,
+            locale,
+          );
+        } catch (error) {
+          console.error("[Malicious server protection] Could not send the notification:", error);
+        }
+        return;
+      }
+    }
+
+    if (nsfwServer.enabled) {
+      const nsfwInvite = await findNsfwInvite(
+        message.content,
+        resolveInvite,
+        nsfwServerKeywords,
+      );
+
+      if (nsfwInvite) {
+        const deletePromise = Promise.resolve().then(() => message.delete());
+        const timeoutPromise = Promise.resolve().then(async () => {
+          if (!member.moderatable) {
+            throw new Error(t(locale, "moderation", "timeoutFailure"));
+          }
+
+          return member.timeout(timeoutMs, "NSFW server invite protection triggered.");
+        });
+        const [deleteResult, timeoutResult] = await Promise.allSettled([
+          deletePromise,
+          timeoutPromise,
+        ]);
+
+        try {
+          await sendNsfwServerAlert(
+            client,
+            message,
+            nsfwInvite,
+            timeoutResult,
+            deleteResult,
+            timeoutMs,
+            moderationChannelId,
+            locale,
+          );
+        } catch (error) {
+          console.error("[NSFW server protection] Could not send the notification:", error);
+        }
+        return;
+      }
+    }
 
     if (raid.enabled) {
       const imageSources = getMessageImageSources(message);

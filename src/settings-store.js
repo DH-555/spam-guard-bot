@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { normalizeParanoiaLevel } from "./detection.js";
+import { normalizeBlockedGuildIds } from "./invite-protection.js";
 import { normalizeRaidLevel } from "./raid-protection.js";
 
 function normalizeRoleIds(value) {
@@ -80,10 +81,76 @@ export class SettingsStore {
     return { enabled: this.#settings[guildId]?.spamProtection?.enabled !== false };
   }
 
+  getMaliciousServerProtection(guildId) {
+    const settings = this.#settings[guildId]?.maliciousServerProtection;
+
+    return {
+      enabled: settings?.enabled !== false,
+      blockedGuildIds: normalizeBlockedGuildIds(settings?.blockedGuildIds),
+    };
+  }
+
+  getNsfwServerProtection(guildId) {
+    return {
+      enabled: this.#settings[guildId]?.nsfwServerProtection?.enabled !== false,
+    };
+  }
+
   async setSpamProtection(guildId, enabled) {
     this.#settings[guildId] = {
       ...this.#settings[guildId],
       spamProtection: { enabled: Boolean(enabled) },
+    };
+    await this.#save();
+  }
+
+  async setMaliciousServerProtection(guildId, enabled) {
+    this.#settings[guildId] = {
+      ...this.#settings[guildId],
+      maliciousServerProtection: {
+        ...this.#settings[guildId]?.maliciousServerProtection,
+        enabled: Boolean(enabled),
+      },
+    };
+    await this.#save();
+  }
+
+  async setNsfwServerProtection(guildId, enabled) {
+    this.#settings[guildId] = {
+      ...this.#settings[guildId],
+      nsfwServerProtection: { enabled: Boolean(enabled) },
+    };
+    await this.#save();
+  }
+
+  async addBlockedGuildId(guildId, blockedGuildId) {
+    const blockedGuildIds = new Set(
+      this.getMaliciousServerProtection(guildId).blockedGuildIds,
+    );
+    blockedGuildIds.add(blockedGuildId);
+
+    this.#settings[guildId] = {
+      ...this.#settings[guildId],
+      maliciousServerProtection: {
+        ...this.#settings[guildId]?.maliciousServerProtection,
+        blockedGuildIds: [...blockedGuildIds],
+      },
+    };
+    await this.#save();
+  }
+
+  async removeBlockedGuildId(guildId, blockedGuildId) {
+    const blockedGuildIds = new Set(
+      this.getMaliciousServerProtection(guildId).blockedGuildIds,
+    );
+    blockedGuildIds.delete(blockedGuildId);
+
+    this.#settings[guildId] = {
+      ...this.#settings[guildId],
+      maliciousServerProtection: {
+        ...this.#settings[guildId]?.maliciousServerProtection,
+        blockedGuildIds: [...blockedGuildIds],
+      },
     };
     await this.#save();
   }

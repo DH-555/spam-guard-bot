@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
 import { loadConfig } from "./config.js";
 import { createMessageHandler } from "./moderation.js";
+import { MALICIOUS_GUILD_IDS } from "./malicious-servers.js";
+import { NSFW_SERVER_KEYWORDS } from "./nsfw-servers.js";
 import { resolveLocale, t } from "./i18n.js";
 import { OcrService } from "./ocr.js";
 import { SettingsStore } from "./settings-store.js";
@@ -82,6 +84,8 @@ const handleMessage = createMessageHandler({
   settingsStore,
   visualMatcher,
   easterEggMatcher,
+  maliciousGuildIds: MALICIOUS_GUILD_IDS,
+  nsfwServerKeywords: NSFW_SERVER_KEYWORDS,
 });
 const handleSetupCommand = createSetupCommandHandler({ settingsStore, config });
 

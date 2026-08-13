@@ -6,6 +6,7 @@ import {
 } from "discord.js";
 import { PARANOIA_LEVELS, normalizeParanoiaLevel } from "./detection.js";
 import { resolveLocale, t } from "./i18n.js";
+import { isDiscordGuildId } from "./invite-protection.js";
 import { RAID_LEVELS } from "./raid-protection.js";
 
 const setupCommand = new SlashCommandBuilder()
@@ -118,6 +119,67 @@ const setupCommand = new SlashCommandBuilder()
         subcommand
           .setName("disable")
           .setDescription("Allow server administrators to be moderated."),
+      ),
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName("malicious-servers")
+      .setDescription("Manage malicious server invite protection.")
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("protection")
+          .setDescription("Enable or disable malicious server invite protection.")
+          .addBooleanOption((option) =>
+            option
+              .setName("enabled")
+              .setDescription("Whether malicious server protection is enabled.")
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("add")
+          .setDescription("Add a server ID to the malicious server blocklist.")
+          .addStringOption((option) =>
+            option
+              .setName("server-id")
+              .setDescription("The Discord server ID to block.")
+              .setMinLength(17)
+              .setMaxLength(20)
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("remove")
+          .setDescription("Remove a server ID from the malicious server blocklist.")
+          .addStringOption((option) =>
+            option
+              .setName("server-id")
+              .setDescription("The Discord server ID to unblock.")
+              .setMinLength(17)
+              .setMaxLength(20)
+              .setRequired(true),
+          ),
+      )
+      .addSubcommand((subcommand) =>
+        subcommand.setName("list").setDescription("List blocked malicious server IDs."),
+      ),
+  )
+  .addSubcommandGroup((group) =>
+    group
+      .setName("nsfw-servers")
+      .setDescription("Manage NSFW server invite protection.")
+      .addSubcommand((subcommand) =>
+        subcommand
+          .setName("protection")
+          .setDescription("Enable or disable NSFW server invite protection.")
+          .addBooleanOption((option) =>
+            option
+              .setName("enabled")
+              .setDescription("Whether NSFW server protection is enabled.")
+              .setRequired(true),
+          ),
       ),
   )
   .addSubcommand((subcommand) =>
@@ -272,6 +334,84 @@ export function createSetupCommandHandler({ settingsStore, config }) {
       return;
     }
 
+    if (subcommandGroup === "malicious-servers") {
+      const protection = settingsStore.getMaliciousServerProtection(
+        interaction.guildId,
+      );
+
+      if (subcommand === "protection") {
+        const enabled = interaction.options.getBoolean("enabled", true);
+        await settingsStore.setMaliciousServerProtection(interaction.guildId, enabled);
+        await interaction.reply({
+          content: t(locale, "setup", "maliciousServersSaved", enabled),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (subcommand === "list") {
+        await interaction.reply({
+          content: protection.blockedGuildIds.length > 0
+            ? t(locale, "setup", "maliciousServerList", protection.blockedGuildIds.join(", "))
+            : t(locale, "setup", "noMaliciousServers"),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const blockedGuildId = interaction.options.getString("server-id", true).trim();
+      if (!isDiscordGuildId(blockedGuildId)) {
+        await interaction.reply({
+          content: t(locale, "setup", "maliciousServerIdInvalid"),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const isListed = protection.blockedGuildIds.includes(blockedGuildId);
+      if (subcommand === "add") {
+        if (isListed) {
+          await interaction.reply({
+            content: t(locale, "setup", "maliciousServerAlreadyListed", blockedGuildId),
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        await settingsStore.addBlockedGuildId(interaction.guildId, blockedGuildId);
+        await interaction.reply({
+          content: t(locale, "setup", "maliciousServerAdded", blockedGuildId),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (!isListed) {
+        await interaction.reply({
+          content: t(locale, "setup", "maliciousServerNotListed", blockedGuildId),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      await settingsStore.removeBlockedGuildId(interaction.guildId, blockedGuildId);
+      await interaction.reply({
+        content: t(locale, "setup", "maliciousServerRemoved", blockedGuildId),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (subcommandGroup === "nsfw-servers" && subcommand === "protection") {
+      const enabled = interaction.options.getBoolean("enabled", true);
+      await settingsStore.setNsfwServerProtection(interaction.guildId, enabled);
+      await interaction.reply({
+        content: t(locale, "setup", "nsfwServersSaved", enabled),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     if (subcommandGroup === "excluded-role") {
       const role = interaction.options.getRole("role", subcommand !== "list");
 
@@ -340,6 +480,8 @@ export function createSetupCommandHandler({ settingsStore, config }) {
       settingsStore.getExcludedAdministrators(interaction.guildId);
     const raid = settingsStore.getRaidProtection(interaction.guildId);
     const spam = settingsStore.getSpamProtection?.(interaction.guildId) ?? { enabled: true };
+    const maliciousServers = settingsStore.getMaliciousServerProtection(interaction.guildId);
+    const nsfwServers = settingsStore.getNsfwServerProtection(interaction.guildId);
     await interaction.reply({
       content: [
         channelId
@@ -355,6 +497,14 @@ export function createSetupCommandHandler({ settingsStore, config }) {
         ),
         t(locale, "setup", "currentAntiRaid", raid.enabled, raid.level),
         t(locale, "setup", "currentSpam", spam.enabled),
+        t(
+          locale,
+          "setup",
+          "currentMaliciousServers",
+          maliciousServers.enabled,
+          maliciousServers.blockedGuildIds.length,
+        ),
+        t(locale, "setup", "currentNsfwServers", nsfwServers.enabled),
       ].join("\n"),
       flags: MessageFlags.Ephemeral,
     });

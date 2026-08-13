@@ -218,6 +218,201 @@ test("blocks a listed spam message without requiring an image", async () => {
   assert.match(channelMessages[0].content, /Message deleted: <@user-spammer>/);
 });
 
+test("deletes malicious server invites, times out the author, and alerts moderators", async () => {
+  const moderationMessages = [];
+  let deleted = 0;
+  let timeoutCalls = 0;
+  const moderationChannel = {
+    isTextBased: () => true,
+    isSendable: () => true,
+    send: async (payload) => moderationMessages.push(payload),
+  };
+  const message = {
+    id: "malicious-invite-message",
+    guildId: "guild-1",
+    channelId: "channel-1",
+    content: "Join this server https://discord.gg/malicious",
+    author: {
+      id: "user-spammer",
+      tag: "spammer#0001",
+      bot: false,
+      displayAvatarURL: () => "https://example.com/avatar.png",
+      toString: () => "<@user-spammer>",
+    },
+    channel: {
+      isTextBased: () => true,
+      isSendable: () => true,
+      send: async () => {},
+      toString: () => "<#channel-1>",
+    },
+    guild: { preferredLocale: "es-ES", ownerId: "owner-1" },
+    attachments: new Map(),
+    embeds: [],
+    messageSnapshots: new Map(),
+    member: {
+      moderatable: true,
+      permissions: { has: () => false },
+      timeout: async () => { timeoutCalls += 1; },
+    },
+    delete: async () => { deleted += 1; },
+    webhookId: null,
+    inGuild: () => true,
+  };
+
+  const handleMessage = createMessageHandler({
+    client: {
+      fetchInvite: async () => ({ guild: { id: "123456789012345678" } }),
+      channels: { fetch: async () => moderationChannel },
+    },
+    config: { timeoutMs: 60_000 },
+    ocrService: { recognize: async () => "" },
+    settingsStore: {
+      getModerationChannelId: () => "moderation-channel",
+      getParanoiaLevel: () => "high",
+      getExcludedRoleIds: () => [],
+      getExcludedAdministrators: () => true,
+      getTimeoutMs: () => null,
+      getMaliciousServerProtection: () => ({
+        enabled: true,
+        blockedGuildIds: ["123456789012345678"],
+      }),
+    },
+  });
+
+  await handleMessage(message);
+
+  assert.equal(deleted, 1);
+  assert.equal(timeoutCalls, 1);
+  assert.equal(moderationMessages.length, 1);
+  assert.match(moderationMessages[0].content, /servidor malicioso/i);
+  assert.match(moderationMessages[0].embeds[0].data.fields[2].value, /123456789012345678/);
+});
+
+test("does not moderate malicious server invites when protection is disabled", async () => {
+  let deleted = 0;
+  let timeoutCalls = 0;
+  const message = {
+    id: "malicious-invite-disabled",
+    guildId: "guild-1",
+    channelId: "channel-1",
+    content: "https://discord.gg/malicious",
+    author: {
+      id: "user-spammer",
+      tag: "spammer#0001",
+      bot: false,
+      displayAvatarURL: () => "https://example.com/avatar.png",
+      toString: () => "<@user-spammer>",
+    },
+    channel: {
+      isTextBased: () => true,
+      isSendable: () => true,
+      send: async () => {},
+    },
+    guild: { preferredLocale: "en-US", ownerId: "owner-1" },
+    attachments: new Map(),
+    embeds: [],
+    messageSnapshots: new Map(),
+    member: {
+      moderatable: true,
+      permissions: { has: () => false },
+      timeout: async () => { timeoutCalls += 1; },
+    },
+    delete: async () => { deleted += 1; },
+    webhookId: null,
+    inGuild: () => true,
+  };
+
+  const handleMessage = createMessageHandler({
+    client: { fetchInvite: async () => ({ guild: { id: "123456789012345678" } }) },
+    config: { timeoutMs: 60_000 },
+    ocrService: { recognize: async () => "" },
+    settingsStore: {
+      getModerationChannelId: () => null,
+      getParanoiaLevel: () => "high",
+      getExcludedRoleIds: () => [],
+      getExcludedAdministrators: () => true,
+      getTimeoutMs: () => null,
+      getMaliciousServerProtection: () => ({ enabled: false, blockedGuildIds: ["123456789012345678"] }),
+    },
+  });
+
+  await handleMessage(message);
+
+  assert.equal(deleted, 0);
+  assert.equal(timeoutCalls, 0);
+});
+
+test("blocks invites to servers with NSFW names and alerts moderators", async () => {
+  const moderationMessages = [];
+  let deleted = 0;
+  let timeoutCalls = 0;
+  const message = {
+    id: "nsfw-invite-message",
+    guildId: "guild-1",
+    channelId: "channel-1",
+    content: "Join: **mailto:/#@discord.gg/nsfw-server**",
+    author: {
+      id: "user-nsfw",
+      tag: "user#0001",
+      bot: false,
+      displayAvatarURL: () => "https://example.com/avatar.png",
+      toString: () => "<@user-nsfw>",
+    },
+    channel: {
+      isTextBased: () => true,
+      isSendable: () => true,
+      send: async () => {},
+      toString: () => "<#channel-1>",
+    },
+    guild: { preferredLocale: "en-US", ownerId: "owner-1" },
+    attachments: new Map(),
+    embeds: [],
+    messageSnapshots: new Map(),
+    member: {
+      moderatable: true,
+      permissions: { has: () => false },
+      timeout: async () => { timeoutCalls += 1; },
+    },
+    delete: async () => { deleted += 1; },
+    webhookId: null,
+    inGuild: () => true,
+  };
+
+  const handleMessage = createMessageHandler({
+    client: {
+      fetchInvite: async () => ({
+        guild: { id: "123456789012345678", name: "Official NSFW +18" },
+      }),
+      channels: {
+        fetch: async () => ({
+          isTextBased: () => true,
+          isSendable: () => true,
+          send: async (payload) => moderationMessages.push(payload),
+        }),
+      },
+    },
+    config: { timeoutMs: 60_000 },
+    ocrService: { recognize: async () => "" },
+    settingsStore: {
+      getModerationChannelId: () => "moderation-channel",
+      getParanoiaLevel: () => "high",
+      getExcludedRoleIds: () => [],
+      getExcludedAdministrators: () => true,
+      getTimeoutMs: () => null,
+      getMaliciousServerProtection: () => ({ enabled: true, blockedGuildIds: [] }),
+      getNsfwServerProtection: () => ({ enabled: true }),
+    },
+  });
+
+  await handleMessage(message);
+
+  assert.equal(deleted, 1);
+  assert.equal(timeoutCalls, 1);
+  assert.equal(moderationMessages.length, 1);
+  assert.equal(moderationMessages[0].embeds[0].data.title, "NSFW server invite blocked");
+  assert.match(moderationMessages[0].embeds[0].data.fields[2].value, /Official NSFW \+18/);
+});
+
 test("ignores listed spam messages from members with excluded roles", async () => {
   let deleted = 0;
   let timeoutCalls = 0;
