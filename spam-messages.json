@@ -87,16 +87,6 @@ Helping developers build strong profiles, prepare for interviews, and pursue leg
 Telegram: @Mrbenjamin24
 
 #Discord #Telegram #WebDev #Developers #SoftwareEngineer #Tech #RemoteWork
-#Freelance #DataAnnotation #Snorkel #Outlier","@Mrbenjamin24",
-  ],
-  "descriptionPatterns": [
-    "\\bnsfw\\s+(?:content|gifs?|memes?)\\b",
-    "\\badult\\s+nsfw\\b",
-    "\\b(?:porn|hentai|xxx|onlyfans)\\s+(?:content|gifs?|memes?|collection|server)\\b"
-  ],
-  "descriptionExclusions": [
-    "\\b(?:no|without)\\s+nsfw\\b",
-    "\\bnsfw\\s+(?:(?:is\\s+)?not\\s+allowed|prohibited|forbidden|banned)\\b",
-    "\\bnsfw\\s+(?:content|gifs?|memes?)\\s+(?:(?:is\\s+)?not\\s+allowed|prohibited|forbidden|banned)\\b"
+#Freelance #DataAnnotation #Snorkel #Outlier","@Mrbenjamin24"
   ]
 }

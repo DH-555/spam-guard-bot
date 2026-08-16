@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 const spamMessagesPath = fileURLToPath(new URL("../spam-messages.json", import.meta.url));
+const spamDescriptionPatternsPath = fileURLToPath(new URL("../spam-description-patterns.json", import.meta.url));
 
 // JSON does not officially allow literal line breaks inside strings. We accept
 // them here so messages can be pasted into the file without escaping anything.
@@ -44,9 +45,11 @@ function escapeLiteralControlCharactersInStrings(source) {
 const spamConfig = JSON.parse(
   escapeLiteralControlCharactersInStrings(readFileSync(spamMessagesPath, "utf8")),
 );
+const spamDescriptionConfig = JSON.parse(readFileSync(spamDescriptionPatternsPath, "utf8"));
 
 // Matching is case-insensitive and ignores accents and repeated whitespace.
 export const SPAM_MESSAGES = Object.freeze(spamConfig);
+export const SPAM_DESCRIPTION_PATTERNS = Object.freeze(spamDescriptionConfig);
 
 export function normalizeSpamText(value) {
   return typeof value === "string"
@@ -54,7 +57,7 @@ export function normalizeSpamText(value) {
     : "";
 }
 
-export function findSpamMessage(content, spamMessages = SPAM_MESSAGES) {
+export function findSpamMessage(content, spamMessages = SPAM_MESSAGES, descriptionConfig = SPAM_DESCRIPTION_PATTERNS) {
   const normalizedContent = normalizeSpamText(content);
 
   if (!normalizedContent) {
@@ -62,12 +65,8 @@ export function findSpamMessage(content, spamMessages = SPAM_MESSAGES) {
   }
 
   const messages = Array.isArray(spamMessages) ? spamMessages : spamMessages.messages;
-  const descriptionPatterns = Array.isArray(spamMessages)
-    ? []
-    : spamMessages.descriptionPatterns ?? [];
-  const descriptionExclusions = Array.isArray(spamMessages)
-    ? []
-    : spamMessages.descriptionExclusions ?? [];
+  const descriptionPatterns = descriptionConfig.patterns ?? [];
+  const descriptionExclusions = descriptionConfig.exclusions ?? [];
 
   for (const spamMessage of messages ?? []) {
     const normalizedSpamMessage = normalizeSpamText(spamMessage);
