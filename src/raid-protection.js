@@ -5,7 +5,11 @@ export const RAID_LEVELS = Object.freeze({
 });
 
 export const DEFAULT_RAID_LEVEL = RAID_LEVELS.HIGH;
-const WINDOW_MS = 60_000;
+const RAID_WINDOWS_MS = Object.freeze({
+  [RAID_LEVELS.HIGH]: 120_000,
+  [RAID_LEVELS.MEDIUM]: 60_000,
+  [RAID_LEVELS.LOW]: 60_000,
+});
 
 export function normalizeRaidLevel(level) {
   return Object.values(RAID_LEVELS).includes(level) ? level : DEFAULT_RAID_LEVEL;
@@ -17,6 +21,10 @@ function threshold(level, requiredChannels = null) {
     case RAID_LEVELS.MEDIUM: return 4;
     default: return 3;
   }
+}
+
+function windowMs(level) {
+  return RAID_WINDOWS_MS[normalizeRaidLevel(level)];
 }
 
 export function normalizeRaidMessage(content) {
@@ -45,12 +53,11 @@ export function getRaidFingerprint(message, imageSources = []) {
 export class RaidTracker {
   #entries = new Map();
 
-  record({ guildId, userId, channelId, content, fingerprint, message, level, requiredChannels }) {
+  record({ guildId, userId, channelId, content, fingerprint, message, level, requiredChannels, now = Date.now() }) {
     const normalized = normalizeRaidMessage(fingerprint ?? content);
     if (!normalized) return null;
-    const now = Date.now();
     const key = `${guildId}:${userId}:${normalized}`;
-    const entries = (this.#entries.get(key) ?? []).filter((entry) => now - entry.timestamp < WINDOW_MS);
+    const entries = (this.#entries.get(key) ?? []).filter((entry) => now - entry.timestamp <= windowMs(level));
     if (!entries.some((entry) => entry.channelId === channelId)) {
       entries.push({ channelId, message, timestamp: now });
     }

@@ -21,3 +21,11 @@ test("counts distinct channels and triggers at high level", () => {
   const triggered = tracker.record({ ...entry("three"), level: "high" });
   assert.equal(triggered.length, 3);
 });
+
+test("keeps high-level messages separated by up to two minutes", () => {
+  const tracker = new RaidTracker();
+  assert.equal(tracker.record({ ...entry("one"), level: "high", now: 0 }), null);
+  assert.equal(tracker.record({ ...entry("two"), level: "high", now: 120_000 }), null);
+  const triggered = tracker.record({ ...entry("three"), level: "high", now: 120_000 });
+  assert.equal(triggered.length, 3);
+});
