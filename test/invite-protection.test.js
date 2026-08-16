@@ -102,6 +102,23 @@ test("detects NSFW keywords in an invite destination server name", async () => {
   });
 });
 
+test("detects NSFW keywords in the invite destination description, tags, and emoji", async () => {
+  const invite = await findNsfwInvite(
+    "https://discord.gg/roblox-external",
+    async () => ({
+      guildId: "123456789012345678",
+      guildName: "BEST ROBLOX EXTERNAL!",
+      guildDescription: "FREE cheats, cracks, leaks, AI Jailbreaks AND NSFW content including 3000+ NSFW GIFs & Memes!",
+      guildTags: ["NSFW"],
+      guildTagEmoji: "+18",
+    }),
+    NSFW_SERVER_KEYWORDS,
+  );
+
+  assert.equal(invite.code, "roblox-external");
+  assert.equal(invite.keyword, "nsfw");
+});
+
 test("caches invite lookups", async () => {
   let fetches = 0;
   const resolveInvite = createInviteResolver({
@@ -120,4 +137,28 @@ test("caches invite lookups", async () => {
     guildName: null,
   });
   assert.equal(fetches, 1);
+});
+
+test("keeps invite guild descriptions and tag metadata available to moderation", async () => {
+  const resolveInvite = createInviteResolver({
+    fetchInvite: async () => ({
+      guild: {
+        id: "123456789012345678",
+        name: "BEST ROBLOX EXTERNAL!",
+        description: "FREE cheats and NSFW content",
+        features: ["GUILD_TAGS"],
+        tag: "NSFW",
+        tagEmoji: "+18",
+      },
+    }),
+  });
+
+  assert.deepEqual(await resolveInvite("roblox-external"), {
+    guildId: "123456789012345678",
+    guildName: "BEST ROBLOX EXTERNAL!",
+    guildDescription: "FREE cheats and NSFW content",
+    guildFeatures: ["GUILD_TAGS"],
+    guildTag: "NSFW",
+    guildTagEmoji: "+18",
+  });
 });

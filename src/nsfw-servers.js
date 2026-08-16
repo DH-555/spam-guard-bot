@@ -53,6 +53,47 @@ export function findNsfwServerKeyword(serverName, keywords = nsfwKeywords) {
   return null;
 }
 
+function getNsfwServerMetadata(invite) {
+  const metadata = [
+    invite?.guildName,
+    invite?.guildDescription,
+    invite?.guildTag,
+    invite?.guildTagEmoji,
+    invite?.guildServerTag,
+    invite?.guildServerTagEmoji,
+    invite?.guildTags,
+    invite?.guildFeatures,
+    invite?.guildWelcomeScreen,
+    invite?.guild,
+  ];
+  const textValues = [];
+
+  const visit = (value) => {
+    if (typeof value === "string") {
+      textValues.push(value);
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+
+    if (value && typeof value === "object") {
+      for (const [key, item] of Object.entries(value)) {
+        // Server descriptions, tags, and emoji names are the useful fields
+        // here. Avoid matching unrelated invite metadata such as IDs.
+        if (/(?:description|tag|emoji|feature|name)/iu.test(key)) {
+          visit(item);
+        }
+      }
+    }
+  };
+
+  for (const value of metadata) visit(value);
+  return textValues.join("\n");
+}
+
 export async function findNsfwInvite(
   content,
   resolveInvite,
@@ -60,7 +101,7 @@ export async function findNsfwInvite(
 ) {
   for (const code of extractDiscordInviteCodes(content)) {
     const invite = await resolveInvite(code);
-    const keyword = findNsfwServerKeyword(invite?.guildName, keywords);
+    const keyword = findNsfwServerKeyword(getNsfwServerMetadata(invite), keywords);
 
     if (keyword) {
       return { code, ...invite, keyword };

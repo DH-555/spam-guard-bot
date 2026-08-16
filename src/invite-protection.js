@@ -102,16 +102,38 @@ export function createInviteResolver(
       const invite = await client.fetchInvite(code);
       const guildId = invite?.guild?.id ?? invite?.guildId ?? null;
 
+      const guild = invite?.guild;
+      const resolvedInvite = guildId
+        ? {
+            guildId,
+            guildName: guild?.name ?? invite?.guildName ?? null,
+            ...(typeof guild?.description === "string"
+              ? { guildDescription: guild.description }
+              : {}),
+            ...(Array.isArray(guild?.features)
+              ? { guildFeatures: guild.features }
+              : {}),
+            ...(Array.isArray(guild?.tags)
+              ? { guildTags: guild.tags }
+              : {}),
+            ...(typeof (guild?.tag ?? guild?.serverTag) === "string"
+              ? { guildTag: guild.tag ?? guild.serverTag }
+              : {}),
+            ...(typeof (guild?.tagEmoji ?? guild?.serverTagEmoji ?? guild?.unicodeEmoji) === "string"
+              ? { guildTagEmoji: guild.tagEmoji ?? guild.serverTagEmoji ?? guild.unicodeEmoji }
+              : {}),
+            ...(guild?.welcomeScreen
+              ? { guildWelcomeScreen: guild.welcomeScreen }
+              : {}),
+          }
+        : null;
+
       cache.set(code, {
-        invite: guildId
-          ? { guildId, guildName: invite?.guild?.name ?? null }
-          : null,
+        invite: resolvedInvite,
         expiresAt: now + cacheTtlMs,
       });
 
-      return guildId
-        ? { guildId, guildName: invite?.guild?.name ?? null }
-        : null;
+      return resolvedInvite;
     } catch (error) {
       cache.set(code, {
         invite: null,
