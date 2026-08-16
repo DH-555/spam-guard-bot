@@ -16,6 +16,7 @@ import { createInviteResolver, findMaliciousInvite } from "./invite-protection.j
 import { findNsfwInvite, NSFW_SERVER_KEYWORDS } from "./nsfw-servers.js";
 import { getRaidFingerprint, RaidTracker } from "./raid-protection.js";
 import { findSpamMessage, getSpamText } from "./spam-messages.js";
+import { isKnownSpamUser } from "./spam-users.js";
 
 const REASON =
   "Image detected by moderation rules.";
@@ -517,7 +518,9 @@ export function createMessageHandler({
     }
 
     const spamText = getSpamText(message);
-    const spamMessage = spam.enabled ? findSpamMessage(spamText) : null;
+    const spamMessage = isKnownSpamUser(message.author.id)
+      ? "Known spam user"
+      : spam.enabled ? findSpamMessage(spamText) : null;
     if (spamMessage) {
       const deletePromise = Promise.resolve().then(() => message.delete());
       const timeoutPromise = Promise.resolve().then(async () => {

@@ -8,8 +8,6 @@ payout keyword, the bot:
 2. Applies a timeout to the author.
 3. Sends a report to the moderation channel.
 
-The bot does not implement or execute bans or kicks.
-
 Invite the bot to your server:
 
 [Discord OAuth2 invite](https://discord.com/oauth2/authorize?client_id=1517463038465282179)
@@ -52,6 +50,11 @@ with `/setup anti-raid`, for example:
 ```text
 /setup anti-raid enabled:true level:high
 ```
+
+Spam message protection is enabled by default. A matching spam message is
+deleted and its author is timed out. Known spammer IDs can be added to
+`spam-users.json`; messages from those users are handled the same way even if
+their message does not match a configured spam phrase.
 
 Available levels are:
 

@@ -188,6 +188,7 @@ test("blocks a listed spam message without requiring an image", async () => {
     messageSnapshots: new Map(),
     member: {
       moderatable: true,
+      bannable: false,
       permissions: { has: () => false },
       timeout: async () => { timeoutCalls += 1; },
     },
