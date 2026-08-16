@@ -371,6 +371,56 @@ function shouldIgnoreMember(message, member, settingsStore) {
   );
 }
 
+async function timeoutMember(guild, member, timeoutMs, reason, locale) {
+  if (!guild.members) {
+    if (!member.moderatable) {
+      throw new Error(t(locale, "moderation", "timeoutFailure"));
+    }
+    return member.timeout(timeoutMs, reason);
+  }
+
+  let currentMember = member;
+
+  // `moderatable` depends on the cached bot member. Refresh it when needed
+  // so a valid timeout is not rejected because the cache is incomplete.
+  if (!guild.members.me && typeof guild.members.fetchMe === "function") {
+    try {
+      await guild.members.fetchMe();
+    } catch (error) {
+      console.warn(`[Moderation] Could not refresh the bot member in guild ${guild.id}:`, error);
+    }
+  }
+
+  // Role changes may not have reached the cached member yet. Refresh the
+  // target only when the cached value says it cannot be timed out.
+  if (!currentMember.moderatable && typeof guild.members.fetch === "function") {
+    try {
+      currentMember = await guild.members.fetch({ user: member.id, force: true });
+    } catch (error) {
+      console.warn(`[Moderation] Could not refresh member ${member.id} in guild ${guild.id}:`, error);
+    }
+  }
+
+  if (!currentMember.moderatable) {
+    const botMember = guild.members.me;
+    console.warn("[Moderation] Timeout unavailable", {
+      guildId: guild.id,
+      userId: currentMember.id,
+      targetIsAdministrator:
+        currentMember.permissions?.has?.(PermissionFlagsBits.Administrator) ?? false,
+      botHasModerateMembers:
+        botMember?.permissions?.has?.(PermissionFlagsBits.ModerateMembers) ?? false,
+      botRolePosition: botMember?.roles?.highest?.position ?? null,
+      targetRolePosition: currentMember.roles?.highest?.position ?? null,
+      botRoleId: botMember?.roles?.highest?.id ?? null,
+      targetRoleId: currentMember.roles?.highest?.id ?? null,
+    });
+    throw new Error(t(locale, "moderation", "timeoutFailure"));
+  }
+
+  return currentMember.timeout(timeoutMs, reason);
+}
+
 export function createMessageHandler({
   client,
   config,
@@ -425,10 +475,9 @@ export function createMessageHandler({
     const suspiciousText = findSuspiciousText(getSpamText(message), settingsStore.getTextScamProtection?.(message.guildId), message.author.createdTimestamp);
     if (suspiciousText) {
       const deletePromise = Promise.resolve().then(() => message.delete());
-      const timeoutPromise = Promise.resolve().then(async () => {
-        if (!member.moderatable) throw new Error(t(locale, "moderation", "timeoutFailure"));
-        return member.timeout(timeoutMs, "Suspicious scam advertisement detected.");
-      });
+      const timeoutPromise = Promise.resolve().then(() =>
+        timeoutMember(message.guild, member, timeoutMs, "Suspicious scam advertisement detected.", locale),
+      );
       const [deleteResult, timeoutResult] = await Promise.allSettled([deletePromise, timeoutPromise]);
       try {
         await sendSpamAlert(client, message, suspiciousText, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale);
@@ -447,13 +496,9 @@ export function createMessageHandler({
 
       if (maliciousInvite) {
         const deletePromise = Promise.resolve().then(() => message.delete());
-        const timeoutPromise = Promise.resolve().then(async () => {
-          if (!member.moderatable) {
-            throw new Error(t(locale, "moderation", "timeoutFailure"));
-          }
-
-          return member.timeout(timeoutMs, "Malicious server invite protection triggered.");
-        });
+        const timeoutPromise = Promise.resolve().then(() =>
+          timeoutMember(message.guild, member, timeoutMs, "Malicious server invite protection triggered.", locale),
+        );
         const [deleteResult, timeoutResult] = await Promise.allSettled([
           deletePromise,
           timeoutPromise,
@@ -486,13 +531,9 @@ export function createMessageHandler({
 
       if (nsfwInvite) {
         const deletePromise = Promise.resolve().then(() => message.delete());
-        const timeoutPromise = Promise.resolve().then(async () => {
-          if (!member.moderatable) {
-            throw new Error(t(locale, "moderation", "timeoutFailure"));
-          }
-
-          return member.timeout(timeoutMs, "NSFW server invite protection triggered.");
-        });
+        const timeoutPromise = Promise.resolve().then(() =>
+          timeoutMember(message.guild, member, timeoutMs, "NSFW server invite protection triggered.", locale),
+        );
         const [deleteResult, timeoutResult] = await Promise.allSettled([
           deletePromise,
           timeoutPromise,
@@ -527,7 +568,9 @@ export function createMessageHandler({
       });
       if (raidEntries) {
         const deleteResults = await Promise.allSettled(raidEntries.map((entry) => entry.message.delete()));
-        const timeoutResult = await Promise.allSettled([member.moderatable ? member.timeout(timeoutMs, "Anti-raid protection triggered.") : Promise.reject(new Error(t(locale, "moderation", "timeoutFailure")))]);
+        const timeoutResult = await Promise.allSettled([
+          timeoutMember(message.guild, member, timeoutMs, "Anti-raid protection triggered.", locale),
+        ]);
         try { await sendRaidAlert(client, message, raidEntries, timeoutMs, moderationChannelId, locale); }
         catch (error) { console.error("[Anti-raid] Could not send the notification:", error); }
         return;
@@ -540,12 +583,9 @@ export function createMessageHandler({
       : spam.enabled ? findSpamMessage(spamText) : null;
     if (spamMessage) {
       const deletePromise = Promise.resolve().then(() => message.delete());
-      const timeoutPromise = Promise.resolve().then(async () => {
-        if (!member.moderatable) {
-          throw new Error(t(locale, "moderation", "timeoutFailure"));
-        }
-        return member.timeout(timeoutMs, "Spam message protection triggered.");
-      });
+      const timeoutPromise = Promise.resolve().then(() =>
+        timeoutMember(message.guild, member, timeoutMs, "Spam message protection triggered.", locale),
+      );
       const [deleteResult, timeoutResult] = await Promise.allSettled([deletePromise, timeoutPromise]);
       try {
         await sendSpamAlert(client, message, spamMessage, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale);
@@ -581,13 +621,9 @@ export function createMessageHandler({
     }
 
     const deletePromise = Promise.resolve().then(() => message.delete());
-    const timeoutPromise = Promise.resolve().then(async () => {
-      if (!member.moderatable) {
-        throw new Error(t(locale, "moderation", "timeoutFailure"));
-      }
-
-      return member.timeout(timeoutMs, REASON);
-    });
+    const timeoutPromise = Promise.resolve().then(() =>
+      timeoutMember(message.guild, member, timeoutMs, REASON, locale),
+    );
 
     const [deleteResult, timeoutResult] = await Promise.allSettled([
       deletePromise,
