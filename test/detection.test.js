@@ -105,6 +105,23 @@ test("detects identity and account scam advertisements by signal combinations", 
   assert.equal(findSuspiciousText("I work remotely as a developer"), null);
 });
 
+test("detects remote-career services advertisements with verification and DM signals", () => {
+  const message = `
+    DEVELOPER & REMOTE CAREER SUPPORT
+    Professional guidance for developers, software engineers, freelancers & remote professionals.
+    CV, Portfolio & LinkedIn Optimization
+    Remote Job & Interview Support
+    Upwork / Fiverr Guidance
+    Bank Account & Deel Setup Guidance
+    KYC & Account Recovery Support
+    Background Check, Drug Test & Fingerprint Guidance
+    Discord: DM / Open a Ticket
+  `;
+
+  assert.match(findSuspiciousText(message), /remote-career/i);
+  assert.equal(findSuspiciousText(message, { remoteJobs: false }), null);
+});
+
 test("detects free-item giveaway lures requesting DMs", () => {
   assert.match(findSuspiciousText("Giving away a Sony camera and lens. First-come, first-served. DM if interested."), /giveaway/i);
   assert.equal(findSuspiciousText("I bought a camera yesterday"), null);

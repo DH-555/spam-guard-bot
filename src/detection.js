@@ -26,6 +26,12 @@ const IDENTITY_SCAM_GROUPS = [
   /\b(?:ssn|social security|id\s*\/\s*dl|driver'?s license|bank account|phone number|paypal|payoneer|wise|kyc|background check|fingerprint|drug test)\b/iu,
   /\b(?:upwork|toptal|freelancer|github|linkedin|remote job|developer interview|interview caller|profile setup|account recovery)\b/iu,
 ];
+const REMOTE_CAREER_SCAM_GROUPS = [
+  /\b(?:developer\w*|software engineer\w*|freelancer\w*|remote professional\w*)\b/iu,
+  /\b(?:cv|resume|portfolio|linkedin|upwork|fiverr|remote job|interview support)\b/iu,
+  /\b(?:bank account|deel|kyc|account recovery|background check|drug test|fingerprint|platform verification|identity verification)\b/iu,
+  /\b(?:discord|dm|direct message|ticket)\b/iu,
+];
 const GIVEAWAY_GROUPS = [
   /\b(?:free|giveaway|giving away|gift|prize)\b/iu,
   /\b(?:camera|sony|lens|console|iphone|laptop|drone)\b/iu,
@@ -132,6 +138,9 @@ export function findSuspiciousText(text, settings = DEFAULT_TEXT_SCAM_SETTINGS, 
   const normalizedText = normalizeOcrText(text);
   if (settings.remoteJobs !== false && IDENTITY_SCAM_GROUPS.every((pattern) => pattern.test(normalizedText))) {
     return "Suspicious identity/account and remote-work services advertisement";
+  }
+  if (settings.remoteJobs !== false && REMOTE_CAREER_SCAM_GROUPS.every((pattern) => pattern.test(normalizedText))) {
+    return "Suspicious remote-career and account-services advertisement";
   }
   if (settings.giveaways === false) return null;
   const hasFreeItem = GIVEAWAY_GROUPS.slice(0, 2).every((pattern) => pattern.test(normalizedText));
