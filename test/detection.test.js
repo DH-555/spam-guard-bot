@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   containsScamPhrase,
+  findSuspiciousText,
   DEFAULT_PARANOIA_LEVEL,
   PARANOIA_LEVELS,
   normalizeOcrText,
@@ -97,4 +98,14 @@ test("normalizes OCR text", () => {
 test("limits the text included in the moderation alert", () => {
   assert.equal(truncateText(" a \n b "), "a b");
   assert.equal(truncateText("123456", 5), "1234…");
+});
+
+test("detects identity and account scam advertisements by signal combinations", () => {
+  assert.match(findSuspiciousText("USA profile, SSN & U.S. ID / DL, KYC verification, Upwork profile setup and remote job interview"), /identity/i);
+  assert.equal(findSuspiciousText("I work remotely as a developer"), null);
+});
+
+test("detects free-item giveaway lures requesting DMs", () => {
+  assert.match(findSuspiciousText("Giving away a Sony camera and lens. First-come, first-served. DM if interested."), /giveaway/i);
+  assert.equal(findSuspiciousText("I bought a camera yesterday"), null);
 });

@@ -4,7 +4,7 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
 } from "discord.js";
-import { PARANOIA_LEVELS, normalizeParanoiaLevel } from "./detection.js";
+import { DM_POLICIES, PARANOIA_LEVELS, normalizeParanoiaLevel } from "./detection.js";
 import { resolveLocale, t } from "./i18n.js";
 import { isDiscordGuildId } from "./invite-protection.js";
 import { RAID_LEVELS } from "./raid-protection.js";
@@ -26,6 +26,13 @@ const setupCommand = new SlashCommandBuilder()
           .setRequired(true),
       ),
   )
+  .addSubcommand((subcommand) => subcommand
+    .setName("text-scams")
+    .setDescription("Configure text scam categories and DM policy.")
+    .addBooleanOption((option) => option.setName("remote-jobs").setDescription("Detect suspicious remote-work/account offers.").setRequired(true))
+    .addBooleanOption((option) => option.setName("giveaways").setDescription("Detect suspicious free-item giveaways.").setRequired(true))
+    .addStringOption((option) => option.setName("dm-policy").setDescription("How DM requests are handled.").setRequired(true)
+      .addChoices({ name: "allow", value: DM_POLICIES.ALLOW }, { name: "deny always", value: DM_POLICIES.DENY }, { name: "deny if account is under 7 days", value: DM_POLICIES.RECENT })))
   .addSubcommand((subcommand) => subcommand.setName("anti-raid").setDescription("Enable or configure anti-raid protection.")
     .addBooleanOption((option) => option.setName("enabled").setDescription("Whether anti-raid is enabled.").setRequired(true))
     .addStringOption((option) => option.setName("level").setDescription("Sensitivity level.").setRequired(true)
@@ -306,6 +313,16 @@ export function createSetupCommandHandler({ settingsStore, config }) {
         content: t(locale, "setup", "paranoiaSaved", formatParanoiaLevel(locale, level)),
         flags: MessageFlags.Ephemeral,
       });
+      return;
+    }
+
+    if (subcommand === "text-scams") {
+      await settingsStore.setTextScamProtection(interaction.guildId, {
+        remoteJobs: interaction.options.getBoolean("remote-jobs", true),
+        giveaways: interaction.options.getBoolean("giveaways", true),
+        dmPolicy: interaction.options.getString("dm-policy", true),
+      });
+      await interaction.reply({ content: "Text scam settings saved.", flags: MessageFlags.Ephemeral });
       return;
     }
 

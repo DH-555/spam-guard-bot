@@ -1,6 +1,6 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { normalizeParanoiaLevel } from "./detection.js";
+import { DEFAULT_TEXT_SCAM_SETTINGS, DM_POLICIES, normalizeParanoiaLevel } from "./detection.js";
 import { normalizeBlockedGuildIds } from "./invite-protection.js";
 import { normalizeRaidLevel } from "./raid-protection.js";
 
@@ -79,6 +79,20 @@ export class SettingsStore {
 
   getSpamProtection(guildId) {
     return { enabled: this.#settings[guildId]?.spamProtection?.enabled !== false };
+  }
+
+  getTextScamProtection(guildId) {
+    const value = this.#settings[guildId]?.textScamProtection;
+    return {
+      remoteJobs: value?.remoteJobs !== false,
+      giveaways: value?.giveaways !== false,
+      dmPolicy: Object.values(DM_POLICIES).includes(value?.dmPolicy) ? value.dmPolicy : DEFAULT_TEXT_SCAM_SETTINGS.dmPolicy,
+    };
+  }
+
+  async setTextScamProtection(guildId, settings) {
+    this.#settings[guildId] = { ...this.#settings[guildId], textScamProtection: { ...this.getTextScamProtection(guildId), ...settings } };
+    await this.#save();
   }
 
   getMaliciousServerProtection(guildId) {

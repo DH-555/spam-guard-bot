@@ -2,6 +2,7 @@ import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { performance } from "node:perf_hooks";
 import {
   containsScamPhrase,
+  findSuspiciousText,
   PARANOIA_LEVELS,
   truncateText,
 } from "./detection.js";
@@ -420,6 +421,22 @@ export function createMessageHandler({
       enabled: true,
     };
     const locale = resolveLocale(message.guild);
+
+    const suspiciousText = findSuspiciousText(getSpamText(message), settingsStore.getTextScamProtection?.(message.guildId), message.author.createdTimestamp);
+    if (suspiciousText) {
+      const deletePromise = Promise.resolve().then(() => message.delete());
+      const timeoutPromise = Promise.resolve().then(async () => {
+        if (!member.moderatable) throw new Error(t(locale, "moderation", "timeoutFailure"));
+        return member.timeout(timeoutMs, "Suspicious scam advertisement detected.");
+      });
+      const [deleteResult, timeoutResult] = await Promise.allSettled([deletePromise, timeoutPromise]);
+      try {
+        await sendSpamAlert(client, message, suspiciousText, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale);
+      } catch (error) {
+        console.error("[Text scam protection] Could not send the notification:", error);
+      }
+      return;
+    }
 
     if (maliciousServer.enabled) {
       const maliciousInvite = await findMaliciousInvite(
