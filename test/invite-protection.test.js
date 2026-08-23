@@ -119,6 +119,37 @@ test("detects NSFW keywords in the invite destination description, tags, and emo
   assert.equal(invite.keyword, "nsfw");
 });
 
+test("detects NSFW keywords in the server description paragraph", async () => {
+  const invite = await findNsfwInvite(
+    "https://discord.gg/A6vxFEq4Tz",
+    async () => ({
+      guildId: "123456789012345678",
+      guildName: "The Crystalline Hideout",
+      guildDescription:
+        "Welcome to The Crystalline Hideout 18+ 🌙✨! Chill & Chat. Exclusive 18+ Spaces.",
+    }),
+    NSFW_SERVER_KEYWORDS,
+  );
+
+  assert.equal(invite.code, "A6vxFEq4Tz");
+  assert.equal(invite.keyword, "18+");
+});
+
+test("detects Discord age-restricted invites when invite text is unavailable", async () => {
+  const invite = await findNsfwInvite(
+    "https://discord.gg/A6vxFEq4Tz",
+    async () => ({
+      guildId: "123456789012345678",
+      guildName: "The Crystalline Hideout",
+      guildNsfwLevel: 3,
+    }),
+    NSFW_SERVER_KEYWORDS,
+  );
+
+  assert.equal(invite.code, "A6vxFEq4Tz");
+  assert.equal(invite.keyword, "Discord age-restricted server");
+});
+
 test("caches invite lookups", async () => {
   let fetches = 0;
   const resolveInvite = createInviteResolver({
@@ -147,6 +178,7 @@ test("keeps invite guild descriptions and tag metadata available to moderation",
         name: "BEST ROBLOX EXTERNAL!",
         description: "FREE cheats and NSFW content",
         features: ["GUILD_TAGS"],
+        nsfwLevel: 3,
         tag: "NSFW",
         tagEmoji: "+18",
       },
@@ -158,7 +190,27 @@ test("keeps invite guild descriptions and tag metadata available to moderation",
     guildName: "BEST ROBLOX EXTERNAL!",
     guildDescription: "FREE cheats and NSFW content",
     guildFeatures: ["GUILD_TAGS"],
+    guildNsfwLevel: 3,
     guildTag: "NSFW",
     guildTagEmoji: "+18",
   });
+});
+
+test("falls back to the invite welcome-screen description", async () => {
+  const resolveInvite = createInviteResolver({
+    fetchInvite: async () => ({
+      guild: {
+        id: "123456789012345678",
+        name: "The Crystalline Hideout",
+        welcomeScreen: {
+          description: "Exclusive 18+ Spaces",
+        },
+      },
+    }),
+  });
+
+  assert.equal(
+    (await resolveInvite("A6vxFEq4Tz")).guildDescription,
+    "Exclusive 18+ Spaces",
+  );
 });

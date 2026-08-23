@@ -53,6 +53,13 @@ export function findNsfwServerKeyword(serverName, keywords = nsfwKeywords) {
   return null;
 }
 
+// Discord's Guild NSFW level 3 means the server is age-restricted. Keep this
+// check independent from names and descriptions because those fields are not
+// always included in an invite response.
+function hasDiscordNsfwLevel(invite) {
+  return invite?.guildNsfwLevel === 3 || invite?.guildNsfwLevel === "AGE_RESTRICTED";
+}
+
 function getNsfwServerMetadata(invite) {
   const metadata = [
     invite?.guildName,
@@ -103,8 +110,12 @@ export async function findNsfwInvite(
     const invite = await resolveInvite(code);
     const keyword = findNsfwServerKeyword(getNsfwServerMetadata(invite), keywords);
 
-    if (keyword) {
-      return { code, ...invite, keyword };
+    if (keyword || hasDiscordNsfwLevel(invite)) {
+      return {
+        code,
+        ...invite,
+        keyword: keyword ?? "Discord age-restricted server",
+      };
     }
   }
 

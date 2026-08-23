@@ -103,15 +103,24 @@ export function createInviteResolver(
       const guildId = invite?.guild?.id ?? invite?.guildId ?? null;
 
       const guild = invite?.guild;
+      const guildDescription =
+        guild?.description ??
+        guild?.welcomeScreen?.description ??
+        invite?.guildDescription ??
+        invite?.description ??
+        null;
       const resolvedInvite = guildId
         ? {
             guildId,
             guildName: guild?.name ?? invite?.guildName ?? null,
-            ...(typeof guild?.description === "string"
-              ? { guildDescription: guild.description }
+            ...(typeof guildDescription === "string"
+              ? { guildDescription }
               : {}),
             ...(Array.isArray(guild?.features)
               ? { guildFeatures: guild.features }
+              : {}),
+            ...(typeof guild?.nsfwLevel === "number"
+              ? { guildNsfwLevel: guild.nsfwLevel }
               : {}),
             ...(Array.isArray(guild?.tags)
               ? { guildTags: guild.tags }
