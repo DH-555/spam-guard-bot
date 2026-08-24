@@ -1,5 +1,6 @@
 import { PermissionFlagsBits } from "discord.js";
 import { FEEDBACK_CHANNEL_ID, FEEDBACK_GUILD_ID } from "./detection-feedback.js";
+import { resolveLocale, t } from "./i18n.js";
 
 export async function handleSpamReport(interaction) {
   if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== "spamreport") return false;
@@ -26,6 +27,7 @@ export async function handleSpamReportMessage(message) {
 }
 
 async function reportSpamMessage(client, guild, targetMessage, reporterTag, reporterId) {
+  const locale = resolveLocale(guild);
   const user = targetMessage.author;
   const content = targetMessage.content;
   const member = await guild.members.fetch(user.id);
@@ -47,12 +49,12 @@ async function reportSpamMessage(client, guild, targetMessage, reporterTag, repo
   const reportChannel = await client.channels.fetch(FEEDBACK_CHANNEL_ID);
   if (reportChannel?.isTextBased() && reportChannel.isSendable() && reportChannel.guildId === FEEDBACK_GUILD_ID) {
     await reportChannel.send({
-      content: "Reporte manual de spam",
-      embeds: [{ color: 0xed4245, title: "Ayuda a mejorar la detección", fields: [
+      content: t(locale, "moderation", "manualSpamReport"),
+      embeds: [{ color: 0xed4245, title: t(locale, "moderation", "feedbackTitle"), fields: [
         { name: "Usuario", value: `${user.tag} (${user.id})` },
-        { name: "Servidor/canal", value: `${guild.id} / ${targetMessage.channelId}` },
+        { name: t(locale, "moderation", "originalServerChannel"), value: `${guild.id} / ${targetMessage.channelId}` },
         { name: "Mensaje", value: content.slice(0, 1024) || "(empty)" },
-        { name: "Reportado por", value: `${reporterTag} (${reporterId})` },
+        { name: t(locale, "moderation", "reportedBy"), value: `${reporterTag} (${reporterId})` },
       ] }],
       files: [
         ...[...targetMessage.attachments.values()].map((attachment) => ({ attachment: attachment.url })),

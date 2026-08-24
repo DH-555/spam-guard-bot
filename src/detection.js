@@ -37,6 +37,11 @@ const GIVEAWAY_GROUPS = [
   /\b(?:camera|sony|lens|console|iphone|laptop|drone)\b/iu,
   /\b(?:first[- ]come|dm|direct message|contact me)\b/iu,
 ];
+const AI_TEAM_RECRUITMENT_GROUPS = [
+  /\b(?:hiring|looking for|join|team members?|recruit(?:ing|ment)?|permanent|long[- ]term)\b/iu,
+  /\b(?:hackathon|ai|artificial intelligence|full[- ]stack|frontend|backend|api|langgraph|crewai|react|next\.js|database|cloud|ui\/?ux)\b/iu,
+  /\b(?:portfolio|linkedin|dm|direct message|contact me|message me)\b/iu,
+];
 export const DM_POLICIES = Object.freeze({ ALLOW: "allow", DENY: "deny", RECENT: "recent" });
 export const DEFAULT_TEXT_SCAM_SETTINGS = Object.freeze({ remoteJobs: true, giveaways: true, dmPolicy: DM_POLICIES.RECENT });
 export const PARANOIA_LEVELS = Object.freeze({
@@ -136,6 +141,9 @@ export function containsScamPhrase(text, paranoiaLevel = DEFAULT_PARANOIA_LEVEL)
 export function findSuspiciousText(text, settings = DEFAULT_TEXT_SCAM_SETTINGS, accountCreatedTimestamp = null) {
   if (typeof text !== "string" || !text.trim()) return null;
   const normalizedText = normalizeOcrText(text);
+  if (settings.remoteJobs !== false && AI_TEAM_RECRUITMENT_GROUPS.every((pattern) => pattern.test(normalizedText))) {
+    return "Potential team recruitment or hiring advertisement requesting portfolio/contact";
+  }
   if (settings.remoteJobs !== false && IDENTITY_SCAM_GROUPS.every((pattern) => pattern.test(normalizedText))) {
     return "Suspicious identity/account and remote-work services advertisement";
   }

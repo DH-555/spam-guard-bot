@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
+import { resolveLocale, t } from "./i18n.js";
 
 export const FEEDBACK_CHANNEL_ID = "1523128007919796224";
 export const FEEDBACK_GUILD_ID = "1093301485347020941";
 const feedbacks = new Map();
 
-export function createDetectionFeedback(match, message) {
+export function createDetectionFeedback(match, message, locale = resolveLocale(message.guild)) {
   const id = randomUUID();
   feedbacks.set(id, {
     messageId: message.id,
@@ -24,8 +25,8 @@ export function createDetectionFeedback(match, message) {
   return {
     id,
     components: [new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`detection-feedback:false:${id}`).setLabel("Falsa detección").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId(`detection-feedback:true:${id}`).setLabel("Detección correcta").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`detection-feedback:false:${id}`).setLabel(t(locale, "moderation", "falseDetection")).setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`detection-feedback:true:${id}`).setLabel(t(locale, "moderation", "correctDetection")).setStyle(ButtonStyle.Success),
     )],
   };
 }
@@ -34,13 +35,14 @@ export async function handleDetectionFeedback(interaction) {
   if (!interaction.isButton() || !interaction.customId.startsWith("detection-feedback:")) return false;
   const [, value, id] = interaction.customId.split(":");
   const feedback = feedbacks.get(id);
+  const locale = resolveLocale(interaction);
   if (!feedback) {
-    await interaction.reply({ content: "Este feedback ya no está disponible.", ephemeral: true });
+    await interaction.reply({ content: t(locale, "moderation", "feedbackExpired"), ephemeral: true });
     return true;
   }
 
   if (interaction.guildId !== feedback.guildId) {
-    await interaction.reply({ content: "Solo puedes valorar esta detección desde su servidor.", ephemeral: true });
+    await interaction.reply({ content: t(locale, "moderation", "feedbackWrongServer"), ephemeral: true });
     return true;
   }
 
@@ -50,16 +52,16 @@ export async function handleDetectionFeedback(interaction) {
   }
 
   await channel.send({
-    content: `Feedback de detección OCR: **${value === "true" ? "detección correcta" : "falsa detección"}**`,
+    content: t(locale, "moderation", "feedbackReport", value === "true" ? t(locale, "moderation", "feedbackCorrect") : t(locale, "moderation", "feedbackFalse")),
     embeds: [{
       color: value === "true" ? 0x57f287 : 0xed4245,
-      title: "Ayuda a mejorar la detección",
+      title: t(locale, "moderation", "feedbackTitle"),
       fields: [
-        { name: "Servidor/canal original", value: `${feedback.guildId} / ${feedback.channelId}` },
+        { name: t(locale, "moderation", "originalServerChannel"), value: `${feedback.guildId} / ${feedback.channelId}` },
         { name: "Usuario", value: `${feedback.authorTag} (${feedback.messageId})` },
-        { name: "Texto reconocido por OCR", value: feedback.recognizedText.slice(0, 1024) },
+        { name: t(locale, "moderation", "recognizedText"), value: feedback.recognizedText.slice(0, 1024) },
         { name: "Mensaje", value: feedback.content.slice(0, 1024) },
-        { name: "Feedback enviado por", value: `${interaction.user.tag} (${interaction.user.id})` },
+        { name: t(locale, "moderation", "reportedBy"), value: `${interaction.user.tag} (${interaction.user.id})` },
       ],
     }],
     files: feedback.imageUrls.map((url) => ({ attachment: url })),
