@@ -69,6 +69,15 @@ export class SettingsStore {
     return Number.isInteger(timeoutMs) && timeoutMs > 0 ? timeoutMs : null;
   }
 
+  getBlockedLinkProtection(guildId) {
+    return { enabled: this.#settings[guildId]?.blockedLinkProtection?.enabled !== false };
+  }
+
+  async setBlockedLinkProtection(guildId, enabled) {
+    this.#settings[guildId] = { ...this.#settings[guildId], blockedLinkProtection: { enabled: Boolean(enabled) } };
+    await this.#save();
+  }
+
   getRaidProtection(guildId) {
     const settings = this.#settings[guildId];
     return {

@@ -33,6 +33,10 @@ const setupCommand = new SlashCommandBuilder()
     .addBooleanOption((option) => option.setName("giveaways").setDescription("Detect suspicious free-item giveaways.").setRequired(true))
     .addStringOption((option) => option.setName("dm-policy").setDescription("How DM requests are handled.").setRequired(true)
       .addChoices({ name: "allow", value: DM_POLICIES.ALLOW }, { name: "deny always", value: DM_POLICIES.DENY }, { name: "deny if account is under 7 days", value: DM_POLICIES.RECENT })))
+  .addSubcommand((subcommand) => subcommand
+    .setName("blocked-link")
+    .setDescription("Enable or disable blocked-link protection.")
+    .addBooleanOption((option) => option.setName("enabled").setDescription("Whether the SurveyBuilder link is blocked.").setRequired(true)))
   .addSubcommand((subcommand) => subcommand.setName("anti-raid").setDescription("Enable or configure anti-raid protection.")
     .addBooleanOption((option) => option.setName("enabled").setDescription("Whether anti-raid is enabled.").setRequired(true))
     .addStringOption((option) => option.setName("level").setDescription("Sensitivity level.").setRequired(true)
@@ -348,6 +352,13 @@ export function createSetupCommandHandler({ settingsStore, config }) {
       const enabled = interaction.options.getBoolean("enabled", true);
       await settingsStore.setSpamProtection(interaction.guildId, enabled);
       await interaction.reply({ content: t(locale, "setup", "spamSaved", enabled), flags: MessageFlags.Ephemeral });
+      return;
+    }
+
+    if (subcommand === "blocked-link") {
+      const enabled = interaction.options.getBoolean("enabled", true);
+      await settingsStore.setBlockedLinkProtection(interaction.guildId, enabled);
+      await interaction.reply({ content: `Blocked-link protection is now ${enabled ? "enabled" : "disabled"}.`, flags: MessageFlags.Ephemeral });
       return;
     }
 

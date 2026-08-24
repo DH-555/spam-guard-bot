@@ -89,6 +89,29 @@ expressions for promotional descriptions. They are ignored when a
 Use `enabled:false` to disable the protection. The anti-raid configuration is
 stored separately for each server and is shown by `/setup status`.
 
+## Blocked link protection
+
+The bot blocks this SurveyBuilder link by default. Administrators can toggle
+the protection per server:
+
+```text
+/setup blocked-link enabled:false
+/setup blocked-link enabled:true
+```
+
+`https://surveybuilder.io/c/capture/MHNKQThUS3A`
+
+## Manual spam reports
+
+Moderators can report a repeated message by replying to it with:
+
+```text
+`!spamreport`
+```
+
+The bot applies a timeout and removes matching messages from the user across
+the server's accessible text channels.
+
 ## Malicious server invite protection
 
 The bot can resolve Discord invitation links and compare the destination

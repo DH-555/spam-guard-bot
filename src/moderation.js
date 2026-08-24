@@ -14,10 +14,12 @@ import {
 } from "./images.js";
 import { resolveLocale } from "./i18n.js";
 import { createInviteResolver, findMaliciousInvite } from "./invite-protection.js";
+import { findBlockedLink } from "./blocked-links.js";
 import { findNsfwInvite, NSFW_SERVER_KEYWORDS } from "./nsfw-servers.js";
 import { getRaidFingerprint, RaidTracker } from "./raid-protection.js";
 import { findSpamMessage, getSpamText } from "./spam-messages.js";
 import { isKnownSpamUser } from "./spam-users.js";
+import { createDetectionFeedback } from "./detection-feedback.js";
 
 const REASON =
   "Image detected by moderation rules.";
@@ -208,9 +210,12 @@ async function sendModerationAlert(
     .setThumbnail(message.author.displayAvatarURL())
     .setTimestamp();
 
+  const feedback = match.kind === "ocr" ? createDetectionFeedback(match, message) : null;
+
   await channel.send({
     content: t(locale, "moderation", "alertContent", message.author.tag),
     embeds: [embed],
+    ...(feedback ? { components: feedback.components } : {}),
     allowedMentions: { parse: [] },
   });
 }
@@ -255,7 +260,7 @@ async function sendEasterEggReply(message, locale) {
   });
 }
 
-async function sendSpamAlert(client, message, spamMessage, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale) {
+async function sendSpamAlert(client, message, spamMessage, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale, feedbackMatch = null) {
   if (!moderationChannelId) {
     await sendFallbackNotice(message, locale);
     return;
@@ -266,6 +271,7 @@ async function sendSpamAlert(client, message, spamMessage, timeoutResult, delete
     throw new Error("The configured moderation channel is unavailable or cannot receive messages.");
   }
 
+  const feedback = feedbackMatch ? createDetectionFeedback(feedbackMatch, message) : null;
   await channel.send({
     content: t(locale, "moderation", "spamAlertContent", message.author.tag),
     embeds: [new EmbedBuilder().setColor(0xed4245).setTitle(t(locale, "moderation", "spamAlertTitle"))
@@ -276,6 +282,7 @@ async function sendSpamAlert(client, message, spamMessage, timeoutResult, delete
         { name: t(locale, "moderation", "timeout", Math.round(timeoutMs / 60_000)), value: resultLabel(timeoutResult, locale), inline: true },
         { name: t(locale, "moderation", "messageDeleted"), value: resultLabel(deleteResult, locale), inline: true },
       ).setTimestamp()],
+    ...(feedback ? { components: feedback.components } : {}),
     allowedMentions: { parse: [] },
   });
 }
@@ -470,7 +477,32 @@ export function createMessageHandler({
     const nsfwServer = settingsStore.getNsfwServerProtection?.(message.guildId) ?? {
       enabled: true,
     };
+    const blockedLinkProtection = settingsStore.getBlockedLinkProtection?.(message.guildId) ?? { enabled: true };
     const locale = resolveLocale(message.guild);
+
+    const blockedLink = blockedLinkProtection.enabled ? findBlockedLink(message.content) : null;
+    if (blockedLink) {
+      const deletePromise = Promise.resolve().then(() => message.delete());
+      const timeoutPromise = Promise.resolve().then(() =>
+        timeoutMember(message.guild, member, timeoutMs, "Blocked link protection triggered.", locale),
+      );
+      const [deleteResult, timeoutResult] = await Promise.allSettled([deletePromise, timeoutPromise]);
+      try {
+        await sendSpamAlert(
+          client,
+          message,
+          "Blocked link: https://surveybuilder.io/c/capture/MHNKQThUS3A",
+          timeoutResult,
+          deleteResult,
+          timeoutMs,
+          moderationChannelId,
+          locale,
+        );
+      } catch (error) {
+        console.error("[Blocked links] Could not send the notification:", error);
+      }
+      return;
+    }
 
     const suspiciousText = findSuspiciousText(getSpamText(message), settingsStore.getTextScamProtection?.(message.guildId), message.author.createdTimestamp);
     if (suspiciousText) {
@@ -480,7 +512,7 @@ export function createMessageHandler({
       );
       const [deleteResult, timeoutResult] = await Promise.allSettled([deletePromise, timeoutPromise]);
       try {
-        await sendSpamAlert(client, message, suspiciousText, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale);
+        await sendSpamAlert(client, message, suspiciousText, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale, { text: getSpamText(message) });
       } catch (error) {
         console.error("[Text scam protection] Could not send the notification:", error);
       }

@@ -21,6 +21,8 @@ import {
   registerSetupCommandForGuild,
   registerSetupCommands,
 } from "./setup-command.js";
+import { handleDetectionFeedback } from "./detection-feedback.js";
+import { handleSpamReportMessage } from "./spam-report.js";
 
 const config = loadConfig();
 const ocrService = new OcrService(config.ocrCachePath, {
@@ -110,6 +112,7 @@ client.on(Events.GuildCreate, (guild) => {
 });
 
 client.on(Events.MessageCreate, (message) => {
+  void handleSpamReportMessage(message).catch((error) => console.error("[Spam report] Failed:", error));
   void handleMessage(message).catch((error) => {
     console.error(
       `[Moderation] Failed to process message ${message.id}:`,
@@ -128,6 +131,15 @@ client.on(Events.MessageUpdate, (_oldMessage, newMessage) => {
 });
 
 client.on(Events.InteractionCreate, (interaction) => {
+  if (interaction.isButton() && interaction.customId.startsWith("detection-feedback:")) {
+    void handleDetectionFeedback(interaction).catch((error) => {
+      console.error("[Detection feedback] Failed to process feedback:", error);
+      if (!interaction.replied && !interaction.deferred) {
+        void interaction.reply({ content: "No se pudo enviar el feedback.", ephemeral: true });
+      }
+    });
+    return;
+  }
   void handleSetupCommand(interaction).catch((error) => {
     console.error("[Discord] Failed to process setup command:", error);
 
