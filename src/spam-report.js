@@ -40,7 +40,7 @@ async function reportSpamMessage(client, guild, targetMessage, reporterTag, repo
       const messages = await channel.messages.fetch({ limit: 100, ...(before ? { before } : {}) });
       if (!messages.size) break;
       const matches = messages.filter((message) => message.author.id === user.id && message.content === content);
-      const results = await Promise.allSettled([...matches.values()].map((message) => message.delete()));
+      const results = await Promise.allSettled([...matches.values()].map(deleteReportedMessage));
       deleted += results.filter((result) => result.status === "fulfilled").length;
       before = messages.last()?.id;
       if (messages.size < 100) break;
@@ -63,4 +63,32 @@ async function reportSpamMessage(client, guild, targetMessage, reporterTag, repo
     });
   }
   return { deleted };
+}
+
+async function deleteReportedMessage(message) {
+  const thread = message.channel?.isThread?.() &&
+    message.channel.ownerId === message.author.id &&
+    typeof message.channel.messages?.fetch === "function"
+    ? message.channel
+    : null;
+  let shouldDeleteThread = false;
+
+  if (thread) {
+    try {
+      const threadMessages = await thread.messages.fetch({ limit: 2 });
+      shouldDeleteThread = threadMessages.size === 1 && threadMessages.has(message.id);
+    } catch (error) {
+      console.warn(`[Spam report] Could not inspect thread ${thread.id} before deletion:`, error);
+    }
+  }
+
+  await message.delete();
+
+  if (shouldDeleteThread) {
+    try {
+      await thread.delete("Reported spam thread contained only the offending message.");
+    } catch (error) {
+      console.warn(`[Spam report] Could not delete thread ${thread.id}:`, error);
+    }
+  }
 }

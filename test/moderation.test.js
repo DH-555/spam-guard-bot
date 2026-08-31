@@ -219,6 +219,72 @@ test("blocks a listed spam message without requiring an image", async () => {
   assert.match(channelMessages[0].content, /Message deleted: <@user-spammer>/);
 });
 
+test("times out before deleting spam and removes a single-message thread", async () => {
+  const events = [];
+  let threadDeleted = 0;
+  const user = {
+    id: "thread-spammer",
+    tag: "thread-spammer#0001",
+    bot: false,
+    displayAvatarURL: () => "https://example.com/avatar.png",
+    toString: () => "<@thread-spammer>",
+  };
+  const thread = {
+    id: "thread-1",
+    ownerId: user.id,
+    isThread: () => true,
+    isTextBased: () => true,
+    isSendable: () => true,
+    messages: {
+      fetch: async () => new Map([["thread-spam-message", message]]),
+    },
+    delete: async () => {
+      events.push("thread-delete");
+      threadDeleted += 1;
+    },
+    send: async () => {},
+  };
+  const message = {
+    id: "thread-spam-message",
+    guildId: "guild-1",
+    channelId: thread.id,
+    content: "FREE CRYPTO GIVEAWAY!  Send crypto to receive double back.",
+    author: user,
+    channel: thread,
+    guild: { preferredLocale: "en-US", ownerId: "owner-1" },
+    attachments: new Map(),
+    embeds: [],
+    messageSnapshots: new Map(),
+    member: {
+      moderatable: true,
+      permissions: { has: () => false },
+      timeout: async () => events.push("timeout"),
+    },
+    delete: async () => events.push("message-delete"),
+    webhookId: null,
+    inGuild: () => true,
+  };
+
+  const handleMessage = createMessageHandler({
+    client: {},
+    config: { timeoutMs: 60_000 },
+    ocrService: { recognize: async () => "" },
+    settingsStore: {
+      getModerationChannelId: () => null,
+      getParanoiaLevel: () => "high",
+      getExcludedRoleIds: () => [],
+      getExcludedAdministrators: () => true,
+      getTimeoutMs: () => null,
+      getSpamProtection: () => ({ enabled: true }),
+    },
+  });
+
+  await handleMessage(message);
+
+  assert.deepEqual(events, ["timeout", "message-delete", "thread-delete"]);
+  assert.equal(threadDeleted, 1);
+});
+
 test("deletes malicious server invites, times out the author, and alerts moderators", async () => {
   const moderationMessages = [];
   let deleted = 0;

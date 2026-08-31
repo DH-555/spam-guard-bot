@@ -428,6 +428,44 @@ async function timeoutMember(guild, member, timeoutMs, reason, locale) {
   return currentMember.timeout(timeoutMs, reason);
 }
 
+async function deleteMessageAndSingleMessageThread(message) {
+  const thread = message.channel?.isThread?.() &&
+    message.channel.ownerId === message.author.id &&
+    typeof message.channel.messages?.fetch === "function"
+    ? message.channel
+    : null;
+  let shouldDeleteThread = false;
+
+  if (thread) {
+    try {
+      const threadMessages = await thread.messages.fetch({ limit: 2 });
+      shouldDeleteThread = threadMessages.size === 1 && threadMessages.has(message.id);
+    } catch (error) {
+      console.warn(`[Moderation] Could not inspect thread ${thread.id} before deletion:`, error);
+    }
+  }
+
+  await message.delete();
+
+  if (shouldDeleteThread) {
+    try {
+      await thread.delete("Moderated thread contained only the offending message.");
+    } catch (error) {
+      console.warn(`[Moderation] Could not delete thread ${thread.id}:`, error);
+    }
+  }
+}
+
+async function timeoutThenDeleteMessage(message, member, timeoutMs, reason, locale) {
+  const timeoutResult = await Promise.allSettled([
+    timeoutMember(message.guild, member, timeoutMs, reason, locale),
+  ]);
+  const deleteResult = await Promise.allSettled([
+    deleteMessageAndSingleMessageThread(message),
+  ]);
+  return { timeoutResult, deleteResult };
+}
+
 export function createMessageHandler({
   client,
   config,
@@ -482,11 +520,9 @@ export function createMessageHandler({
 
     const blockedLink = blockedLinkProtection.enabled ? findBlockedLink(message.content) : null;
     if (blockedLink) {
-      const deletePromise = Promise.resolve().then(() => message.delete());
-      const timeoutPromise = Promise.resolve().then(() =>
-        timeoutMember(message.guild, member, timeoutMs, "Blocked link protection triggered.", locale),
+      const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
+        message, member, timeoutMs, "Blocked link protection triggered.", locale,
       );
-      const [deleteResult, timeoutResult] = await Promise.allSettled([deletePromise, timeoutPromise]);
       try {
         await sendSpamAlert(
           client,
@@ -506,11 +542,9 @@ export function createMessageHandler({
 
     const suspiciousText = findSuspiciousText(getSpamText(message), settingsStore.getTextScamProtection?.(message.guildId), message.author.createdTimestamp);
     if (suspiciousText) {
-      const deletePromise = Promise.resolve().then(() => message.delete());
-      const timeoutPromise = Promise.resolve().then(() =>
-        timeoutMember(message.guild, member, timeoutMs, "Suspicious scam advertisement detected.", locale),
+      const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
+        message, member, timeoutMs, "Suspicious scam advertisement detected.", locale,
       );
-      const [deleteResult, timeoutResult] = await Promise.allSettled([deletePromise, timeoutPromise]);
       try {
         await sendSpamAlert(client, message, suspiciousText, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale, { text: getSpamText(message) });
       } catch (error) {
@@ -527,14 +561,9 @@ export function createMessageHandler({
       );
 
       if (maliciousInvite) {
-        const deletePromise = Promise.resolve().then(() => message.delete());
-        const timeoutPromise = Promise.resolve().then(() =>
-          timeoutMember(message.guild, member, timeoutMs, "Malicious server invite protection triggered.", locale),
+        const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
+          message, member, timeoutMs, "Malicious server invite protection triggered.", locale,
         );
-        const [deleteResult, timeoutResult] = await Promise.allSettled([
-          deletePromise,
-          timeoutPromise,
-        ]);
 
         try {
           await sendMaliciousServerAlert(
@@ -562,14 +591,9 @@ export function createMessageHandler({
       );
 
       if (nsfwInvite) {
-        const deletePromise = Promise.resolve().then(() => message.delete());
-        const timeoutPromise = Promise.resolve().then(() =>
-          timeoutMember(message.guild, member, timeoutMs, "NSFW server invite protection triggered.", locale),
+        const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
+          message, member, timeoutMs, "NSFW server invite protection triggered.", locale,
         );
-        const [deleteResult, timeoutResult] = await Promise.allSettled([
-          deletePromise,
-          timeoutPromise,
-        ]);
 
         try {
           await sendNsfwServerAlert(
@@ -599,10 +623,12 @@ export function createMessageHandler({
           : null,
       });
       if (raidEntries) {
-        const deleteResults = await Promise.allSettled(raidEntries.map((entry) => entry.message.delete()));
         const timeoutResult = await Promise.allSettled([
           timeoutMember(message.guild, member, timeoutMs, "Anti-raid protection triggered.", locale),
         ]);
+        const deleteResults = await Promise.allSettled(
+          raidEntries.map((entry) => deleteMessageAndSingleMessageThread(entry.message)),
+        );
         try { await sendRaidAlert(client, message, raidEntries, timeoutMs, moderationChannelId, locale); }
         catch (error) { console.error("[Anti-raid] Could not send the notification:", error); }
         return;
@@ -614,11 +640,9 @@ export function createMessageHandler({
       ? "Known spam user"
       : spam.enabled ? findSpamMessage(spamText) : null;
     if (spamMessage) {
-      const deletePromise = Promise.resolve().then(() => message.delete());
-      const timeoutPromise = Promise.resolve().then(() =>
-        timeoutMember(message.guild, member, timeoutMs, "Spam message protection triggered.", locale),
+      const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
+        message, member, timeoutMs, "Spam message protection triggered.", locale,
       );
-      const [deleteResult, timeoutResult] = await Promise.allSettled([deletePromise, timeoutPromise]);
       try {
         await sendSpamAlert(client, message, spamMessage, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale);
       } catch (error) {
@@ -652,15 +676,9 @@ export function createMessageHandler({
       return;
     }
 
-    const deletePromise = Promise.resolve().then(() => message.delete());
-    const timeoutPromise = Promise.resolve().then(() =>
-      timeoutMember(message.guild, member, timeoutMs, REASON, locale),
+    const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
+      message, member, timeoutMs, REASON, locale,
     );
-
-    const [deleteResult, timeoutResult] = await Promise.allSettled([
-      deletePromise,
-      timeoutPromise,
-    ]);
 
     try {
       if (moderationChannelId) {
