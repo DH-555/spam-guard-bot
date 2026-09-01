@@ -91,8 +91,8 @@ stored separately for each server and is shown by `/setup status`.
 
 ## Blocked link protection
 
-The bot blocks this SurveyBuilder link by default. Administrators can toggle
-the protection per server:
+The bot blocks these links by default. Administrators can toggle the
+protection per server:
 
 ```text
 /setup blocked-link enabled:false
@@ -100,6 +100,8 @@ the protection per server:
 ```
 
 `https://surveybuilder.io/c/capture/MHNKQThUS3A`
+`https://www.upwork.com/freelancers/~011c10fca307bf0e02?mp_source=share`
+`https://agentrouter.org/register?aff=QaiK`
 
 ## Manual spam reports
 

@@ -7,6 +7,17 @@ test("detects the blocked SurveyBuilder link in message text", () => {
   assert.ok(findBlockedLink("https://SURVEYBUILDER.IO/c/capture/mhnkqthus3a?ref=discord"));
 });
 
+test("detects the blocked Upwork profile and AgentRouter referral links", () => {
+  assert.equal(
+    findBlockedLink("https://www.upwork.com/freelancers/~011c10fca307bf0e02?mp_source=share"),
+    "https://www.upwork.com/freelancers/~011c10fca307bf0e02?mp_source=share",
+  );
+  assert.equal(
+    findBlockedLink("https://agentrouter.org/register?aff=QaiK"),
+    "https://agentrouter.org/register?aff=QaiK",
+  );
+});
+
 test("does not block unrelated SurveyBuilder links", () => {
   assert.equal(findBlockedLink("https://surveybuilder.io/c/capture/other-form"), null);
 });

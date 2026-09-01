@@ -87,13 +87,10 @@ function getNsfwServerMetadata(invite) {
     }
 
     if (value && typeof value === "object") {
-      for (const [key, item] of Object.entries(value)) {
-        // Server descriptions, tags, and emoji names are the useful fields
-        // here. Avoid matching unrelated invite metadata such as IDs.
-        if (/(?:description|tag|emoji|feature|name)/iu.test(key)) {
-          visit(item);
-        }
-      }
+      // The selected roots above are already limited to server metadata.
+      // Discord may nest tag/emoji text under generic keys such as `value`,
+      // so inspect every nested value instead of relying on field names.
+      for (const item of Object.values(value)) visit(item);
     }
   };
 

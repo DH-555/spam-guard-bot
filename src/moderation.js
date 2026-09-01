@@ -527,7 +527,7 @@ export function createMessageHandler({
         await sendSpamAlert(
           client,
           message,
-          "Blocked link: https://surveybuilder.io/c/capture/MHNKQThUS3A",
+          `Blocked link: ${blockedLink}`,
           timeoutResult,
           deleteResult,
           timeoutMs,

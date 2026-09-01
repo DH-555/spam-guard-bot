@@ -135,6 +135,47 @@ test("detects NSFW keywords in the server description paragraph", async () => {
   assert.equal(invite.keyword, "18+");
 });
 
+test("detects emoji-labelled NSFW servers and ID-verified 18+ descriptions", async () => {
+  const emojiLabelInvite = await findNsfwInvite(
+    "https://discord.gg/emoji-label",
+    async () => ({
+      guildId: "123456789012345678",
+      guildName: "Community",
+      guildTags: [{ value: "emoji_berenjena NSFW" }],
+    }),
+    NSFW_SERVER_KEYWORDS,
+  );
+  assert.equal(emojiLabelInvite.keyword, "nsfw");
+
+  const verifiedInvite = await findNsfwInvite(
+    "https://discord.gg/id-verified",
+    async () => ({
+      guildId: "123456789012345678",
+      guildName: "Community",
+      guildDescription: "18+ ID verified only",
+    }),
+    NSFW_SERVER_KEYWORDS,
+  );
+  assert.equal(verifiedInvite.keyword, "18+");
+});
+
+test("detects NSFW emoji labels, leetspeak, and promotional descriptions", async () => {
+  for (const [code, metadata, expectedKeyword] of [
+    ["emoji-18", { guildTagEmoji: "emoji 18 NSFW" }, "nsfw"],
+    ["h3ntai", { guildTags: ["h3ntai"] }, "h3ntai"],
+    ["p0rn", { guildTags: ["P0rn"] }, "p0rn"],
+    ["nsfw-gifs", { guildDescription: "NSFW GIFs and NSFW Memes" }, "nsfw"],
+    ["adult-nsfw", { guildDescription: "Adult NSFW community" }, "nsfw"],
+  ]) {
+    const invite = await findNsfwInvite(
+      `https://discord.gg/${code}`,
+      async () => ({ guildId: "123456789012345678", guildName: "Community", ...metadata }),
+      NSFW_SERVER_KEYWORDS,
+    );
+    assert.equal(invite.keyword, expectedKeyword);
+  }
+});
+
 test("detects Discord age-restricted invites when invite text is unavailable", async () => {
   const invite = await findNsfwInvite(
     "https://discord.gg/A6vxFEq4Tz",
