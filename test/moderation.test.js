@@ -285,6 +285,90 @@ test("times out before deleting spam and removes a single-message thread", async
   assert.equal(threadDeleted, 1);
 });
 
+test("anti-raid deletes a message starter and the thread it created", async () => {
+  const deletedMessages = [];
+  const deletedThreads = [];
+  const channelMessages = [];
+  const user = {
+    id: "raid-user",
+    tag: "raid-user#0001",
+    bot: false,
+    displayAvatarURL: () => "https://example.com/avatar.png",
+    toString: () => "<@raid-user>",
+  };
+  const member = {
+    moderatable: true,
+    permissions: { has: () => false },
+    timeout: async () => {},
+  };
+
+  const startedThread = {
+    id: "started-thread",
+    ownerId: user.id,
+    isThread: () => true,
+    delete: async () => deletedThreads.push("started-thread"),
+  };
+
+  function raidMessage(id, channelId, thread = undefined) {
+    const channel = {
+      isThread: () => false,
+      isTextBased: () => true,
+      isSendable: () => true,
+      send: async (payload) => channelMessages.push(payload),
+    };
+    return {
+      id,
+      guildId: "guild-raid",
+      channelId,
+      content: "discord.gg/example repeated raid message",
+      author: user,
+      channel,
+      ...(thread ? { thread, hasThread: true } : {}),
+      guild: { preferredLocale: "en-US", ownerId: "owner-1" },
+      attachments: new Map(),
+      embeds: [],
+      messageSnapshots: new Map(),
+      member,
+      delete: async () => deletedMessages.push(id),
+      webhookId: null,
+      inGuild: () => true,
+    };
+  }
+
+  const messages = [
+    raidMessage("raid-message-1", "raid-channel-1", startedThread),
+    raidMessage("raid-message-2", "raid-channel-2"),
+    raidMessage("raid-message-3", "raid-channel-3"),
+  ];
+
+  const handleMessage = createMessageHandler({
+    client: {},
+    config: { timeoutMs: 60_000 },
+    ocrService: { recognize: async () => "" },
+    settingsStore: {
+      getModerationChannelId: () => null,
+      getParanoiaLevel: () => "high",
+      getExcludedRoleIds: () => [],
+      getExcludedAdministrators: () => true,
+      getTimeoutMs: () => null,
+      getRaidProtection: () => ({ enabled: true, level: "high" }),
+      getSpamProtection: () => ({ enabled: false }),
+    },
+  });
+
+  for (const message of messages) {
+    await handleMessage(message);
+  }
+
+  assert.deepEqual(deletedMessages.sort(), [
+    "raid-message-1",
+    "raid-message-2",
+    "raid-message-3",
+  ]);
+  assert.deepEqual(deletedThreads, ["started-thread"]);
+  assert.equal(channelMessages.length, 1);
+});
+
 test("deletes malicious server invites, times out the author, and alerts moderators", async () => {
   const moderationMessages = [];
   let deleted = 0;

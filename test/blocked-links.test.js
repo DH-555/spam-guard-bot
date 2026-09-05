@@ -21,3 +21,20 @@ test("detects the blocked Upwork profile and AgentRouter referral links", () => 
 test("does not block unrelated SurveyBuilder links", () => {
   assert.equal(findBlockedLink("https://surveybuilder.io/c/capture/other-form"), null);
 });
+
+test("detects the blocked Telegram links", () => {
+  for (const username of ["SJDIJOG", "SDITRIVDK", "SFIOSGK"]) {
+    assert.equal(findBlockedLink(`https://t.me/${username}`), `https://t.me/${username}`);
+  }
+});
+
+test("detects blocked domains and their subdomains", () => {
+  assert.ok(findBlockedLink("https://zangi.com"));
+  assert.ok(findBlockedLink("https://www.zangi.com/download"));
+  assert.ok(findBlockedLink("http://support.eu.zangi.com:8080/help"));
+});
+
+test("does not block domains that only contain a blocked domain as a suffix", () => {
+  assert.equal(findBlockedLink("https://notzangi.com"), null);
+  assert.equal(findBlockedLink("https://zangi.com.example.org"), null);
+});

@@ -103,6 +103,10 @@ protection per server:
 `https://www.upwork.com/freelancers/~011c10fca307bf0e02?mp_source=share`
 `https://agentrouter.org/register?aff=QaiK`
 
+También se pueden bloquear dominios completos, incluidos sus subdominios. El
+listado global está en [blocked-domains.json](blocked-domains.json). Actualmente
+incluye `zangi.com`.
+
 ## Manual spam reports
 
 Moderators can report a repeated message by replying to it with:

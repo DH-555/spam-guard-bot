@@ -428,7 +428,25 @@ async function timeoutMember(guild, member, timeoutMs, reason, locale) {
   return currentMember.timeout(timeoutMs, reason);
 }
 
+function getThreadStartedByMessage(message) {
+  if (message.channel?.isThread?.()) return null;
+
+  const thread = message.thread ??
+    message.channel?.threads?.cache?.get?.(message.id);
+
+  if (
+    !thread?.isThread?.() ||
+    thread.ownerId !== message.author.id ||
+    typeof thread.delete !== "function"
+  ) {
+    return null;
+  }
+
+  return thread;
+}
+
 async function deleteMessageAndSingleMessageThread(message) {
+  const startedThread = getThreadStartedByMessage(message);
   const thread = message.channel?.isThread?.() &&
     message.channel.ownerId === message.author.id &&
     typeof message.channel.messages?.fetch === "function"
@@ -442,6 +460,16 @@ async function deleteMessageAndSingleMessageThread(message) {
       shouldDeleteThread = threadMessages.size === 1 && threadMessages.has(message.id);
     } catch (error) {
       console.warn(`[Moderation] Could not inspect thread ${thread.id} before deletion:`, error);
+    }
+  }
+
+  // A message that starts a thread is stored in the parent channel, not in
+  // the thread. Delete the thread explicitly before deleting its starter.
+  if (startedThread) {
+    try {
+      await startedThread.delete("Moderated message and its thread.");
+    } catch (error) {
+      console.warn(`[Moderation] Could not delete thread ${startedThread.id}:`, error);
     }
   }
 
