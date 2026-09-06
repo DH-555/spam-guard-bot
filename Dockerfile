@@ -34,6 +34,7 @@ COPY spam-description-patterns.json ./spam-description-patterns.json
 COPY blocked-domains.json ./blocked-domains.json
 COPY malicious-servers.json ./malicious-servers.json
 COPY nsfw-server-keywords.json ./nsfw-server-keywords.json
+COPY scam-image-channels.json ./scam-image-channels.json
 COPY src ./src
 
 RUN mkdir -p /app/data /app/tessdata \

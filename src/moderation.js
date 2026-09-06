@@ -20,6 +20,7 @@ import { getRaidFingerprint, RaidTracker } from "./raid-protection.js";
 import { findSpamMessage, getSpamText } from "./spam-messages.js";
 import { isKnownSpamUser } from "./spam-users.js";
 import { createDetectionFeedback } from "./detection-feedback.js";
+import { findKnownScamImageChannel } from "./scam-image-channels.js";
 
 const REASON =
   "Image detected by moderation rules.";
@@ -45,6 +46,20 @@ async function findMatchingImage(
     easterEggMatcher && easterEggMatcher.references?.length > 0;
 
   for (const source of imageSources) {
+    const knownScamImageChannel = findKnownScamImageChannel(source.url);
+
+    if (knownScamImageChannel) {
+      console.log(
+        `[Image analysis] ${source.label}: known scam-image source channel ` +
+          `${knownScamImageChannel.channelId} (${knownScamImageChannel.name}).`,
+      );
+      return {
+        source,
+        kind: "knownScamImageChannel",
+        knownScamImageChannel,
+      };
+    }
+
     if (source.size !== null && source.size > config.maxImageBytes) {
       console.warn(
         `[OCR] Image skipped because of its size (${source.size} bytes): ${source.label}`,
@@ -160,6 +175,14 @@ async function sendModerationAlert(
           match.visualMatch.reference.label,
           match.visualMatch.distance,
         )
+      : match.kind === "knownScamImageChannel"
+        ? t(
+            locale,
+            "moderation",
+            "knownScamImageChannel",
+            match.knownScamImageChannel.name,
+            match.knownScamImageChannel.channelId,
+          )
       : match.kind === "easterEgg"
         ? t(locale, "moderation", "easterEggMatch")
       : t(locale, "moderation", "ocrMatch");
@@ -202,8 +225,12 @@ async function sendModerationAlert(
       {
         name: t(locale, "moderation", "recognizedText"),
         value:
-          match.kind === "visual"
-            ? t(locale, "moderation", "ocrSkipped")
+          match.kind === "visual" || match.kind === "knownScamImageChannel"
+            ? t(
+                locale,
+                "moderation",
+                match.kind === "visual" ? "ocrSkipped" : "knownChannelOcrSkipped",
+              )
             : truncateText(match.text) || t(locale, "moderation", "emptyText"),
       },
     )

@@ -14,10 +14,13 @@ const STRINGS = {
       detectionMethod: "Detection method",
       visualMatch: (label, distance) =>
         `Visual match: ${label} (distance ${distance})`,
+      knownScamImageChannel: (name, channelId) =>
+        `Known scam-image source channel: ${name} (\`${channelId}\`)`,
       ocrMatch: "OCR keywords detected",
       easterEggMatch: "Easter egg OCR match",
       easterEggReply: "Hahaha I got it 😜",
       ocrSkipped: "(visual match, OCR skipped)",
+      knownChannelOcrSkipped: "(known scam-image source channel, OCR skipped)",
       yes: "Yes",
       noPrefix: (reason) => `No: ${reason}`,
       emptyText: "(empty)",
@@ -114,10 +117,13 @@ const STRINGS = {
       detectionMethod: "Método de detección",
       visualMatch: (label, distance) =>
         `Coincidencia visual: ${label} (distancia ${distance})`,
+      knownScamImageChannel: (name, channelId) =>
+        `Canal fuente conocido de imágenes de estafa: ${name} (\`${channelId}\`)`,
       ocrMatch: "Palabras clave detectadas por OCR",
       easterEggMatch: "Coincidencia OCR del easter egg",
       easterEggReply: "Jajaja, piqué.",
       ocrSkipped: "(coincidencia visual, OCR omitido)",
+      knownChannelOcrSkipped: "(canal fuente conocido de imágenes de estafa, OCR omitido)",
       yes: "Sí",
       noPrefix: (reason) => `No: ${reason}`,
       emptyText: "(vacío)",

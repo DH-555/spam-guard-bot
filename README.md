@@ -34,6 +34,22 @@ You can tune the detection sensitivity per server with `/setup paranoia`:
 
 The default paranoia level is `high`.
 
+## Known scam-image source channels
+
+The bot also checks the source channel embedded in Discord attachment URLs
+(`.../attachments/<channel_id>/...`). The current list is maintained in
+[`scam-image-channels.json`](scam-image-channels.json) and contains the channel
+ID observed as a repeated source of MrBeast scam images:
+
+| Channel ID | Description |
+| --- | --- |
+| `740463504602955806` | MrBeast scam images |
+
+An image from a listed channel is blocked immediately and the moderation alert
+identifies the source channel. This signal only works when Discord preserves
+the original attachment URL; a re-uploaded image receives a new channel ID and
+still relies on visual matching or OCR.
+
 ## Anti-raid protection
 
 The bot includes an anti-raid protection that detects when a user sends the
