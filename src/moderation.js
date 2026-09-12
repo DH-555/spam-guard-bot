@@ -512,10 +512,10 @@ async function deleteMessageAndSingleMessageThread(message) {
 }
 
 async function timeoutThenDeleteMessage(message, member, timeoutMs, reason, locale) {
-  const timeoutResult = await Promise.allSettled([
+  const [timeoutResult] = await Promise.allSettled([
     timeoutMember(message.guild, member, timeoutMs, reason, locale),
   ]);
-  const deleteResult = await Promise.allSettled([
+  const [deleteResult] = await Promise.allSettled([
     deleteMessageAndSingleMessageThread(message),
   ]);
   return { timeoutResult, deleteResult };

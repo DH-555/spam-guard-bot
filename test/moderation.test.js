@@ -219,7 +219,7 @@ test("blocks a listed spam message without requiring an image", async () => {
   assert.match(channelMessages[0].content, /Message deleted: <@user-spammer>/);
 });
 
-test("times out before deleting spam and removes a single-message thread", async () => {
+test("times out before deleting spam and removes its single-message thread", async () => {
   const events = [];
   let threadDeleted = 0;
   const user = {
@@ -437,6 +437,8 @@ test("deletes malicious server invites, times out the author, and alerts moderat
   assert.equal(moderationMessages.length, 1);
   assert.match(moderationMessages[0].content, /servidor malicioso/i);
   assert.match(moderationMessages[0].embeds[0].data.fields[2].value, /123456789012345678/);
+  assert.equal(moderationMessages[0].embeds[0].data.fields[4].value, "Sí");
+  assert.equal(moderationMessages[0].embeds[0].data.fields[5].value, "Sí");
 });
 
 test("does not moderate malicious server invites when protection is disabled", async () => {
