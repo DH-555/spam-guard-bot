@@ -372,6 +372,7 @@ test("anti-raid deletes a message starter and the thread it created", async () =
 test("deletes malicious server invites, times out the author, and alerts moderators", async () => {
   const moderationMessages = [];
   let deleted = 0;
+  let threadDeleted = 0;
   let timeoutCalls = 0;
   const moderationChannel = {
     isTextBased: () => true,
@@ -382,7 +383,7 @@ test("deletes malicious server invites, times out the author, and alerts moderat
     id: "malicious-invite-message",
     guildId: "guild-1",
     channelId: "channel-1",
-    content: "Join this server https://discord.gg/malicious",
+    content: "Please read the details in this thread.",
     author: {
       id: "user-spammer",
       tag: "spammer#0001",
@@ -391,6 +392,13 @@ test("deletes malicious server invites, times out the author, and alerts moderat
       toString: () => "<@user-spammer>",
     },
     channel: {
+      name: "discord.gg/malicious",
+      ownerId: "user-spammer",
+      isThread: () => true,
+      messages: {
+        fetch: async () => new Map([[message.id, message]]),
+      },
+      delete: async () => { threadDeleted += 1; },
       isTextBased: () => true,
       isSendable: () => true,
       send: async () => {},
@@ -433,6 +441,7 @@ test("deletes malicious server invites, times out the author, and alerts moderat
   await handleMessage(message);
 
   assert.equal(deleted, 1);
+  assert.equal(threadDeleted, 1);
   assert.equal(timeoutCalls, 1);
   assert.equal(moderationMessages.length, 1);
   assert.match(moderationMessages[0].content, /servidor malicioso/i);

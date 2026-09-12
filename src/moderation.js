@@ -472,6 +472,14 @@ function getThreadStartedByMessage(message) {
   return thread;
 }
 
+function getThreadTitle(message) {
+  const thread = message.channel?.isThread?.()
+    ? message.channel
+    : message.thread ?? message.channel?.threads?.cache?.get?.(message.id);
+
+  return typeof thread?.name === "string" ? thread.name : "";
+}
+
 async function deleteMessageAndSingleMessageThread(message) {
   const startedThread = getThreadStartedByMessage(message);
   const thread = message.channel?.isThread?.() &&
@@ -572,6 +580,10 @@ export function createMessageHandler({
     };
     const blockedLinkProtection = settingsStore.getBlockedLinkProtection?.(message.guildId) ?? { enabled: true };
     const locale = resolveLocale(message.guild);
+    const threadTitle = getThreadTitle(message);
+    const messageAndThreadTitle = [message.content, threadTitle]
+      .filter((value) => typeof value === "string" && value.length > 0)
+      .join("\n");
 
     const blockedLink = blockedLinkProtection.enabled ? findBlockedLink(message.content) : null;
     if (blockedLink) {
@@ -595,7 +607,11 @@ export function createMessageHandler({
       return;
     }
 
-    const suspiciousText = findSuspiciousText(getSpamText(message), settingsStore.getTextScamProtection?.(message.guildId), message.author.createdTimestamp);
+    const suspiciousText = findSuspiciousText(
+      [getSpamText(message), threadTitle].filter(Boolean).join("\n"),
+      settingsStore.getTextScamProtection?.(message.guildId),
+      message.author.createdTimestamp,
+    );
     if (suspiciousText) {
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
         message, member, timeoutMs, "Suspicious scam advertisement detected.", locale,
@@ -610,7 +626,7 @@ export function createMessageHandler({
 
     if (maliciousServer.enabled) {
       const maliciousInvite = await findMaliciousInvite(
-        message.content,
+        messageAndThreadTitle,
         [...maliciousGuildIds, ...maliciousServer.blockedGuildIds],
         resolveInvite,
       );
@@ -640,7 +656,7 @@ export function createMessageHandler({
 
     if (nsfwServer.enabled) {
       const nsfwInvite = await findNsfwInvite(
-        message.content,
+        messageAndThreadTitle,
         resolveInvite,
         nsfwServerKeywords,
       );
