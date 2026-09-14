@@ -745,6 +745,7 @@ test("resolves malicious Discord invites found inside image OCR", async () => {
     const moderationMessages = [];
     let deleted = 0;
     let timeoutCalls = 0;
+    let ocrCalls = 0;
     let resolvedCode = null;
     const message = {
       id: "malicious-image-invite-message",
@@ -810,7 +811,10 @@ test("resolves malicious Discord invites found inside image OCR", async () => {
         timeoutMs: 60_000,
       },
       ocrService: {
-        recognize: async () => "JOIN DISCORD.GG/PIPER FOR MORE",
+        recognize: async () => {
+          ocrCalls += 1;
+          return "JOIN DISCORD.GG/PIPER FOR MORE";
+        },
       },
       maliciousGuildIds: ["123456789012345678"],
       settingsStore: {
@@ -826,6 +830,7 @@ test("resolves malicious Discord invites found inside image OCR", async () => {
     await handleMessage(message);
 
     assert.equal(resolvedCode, "piper");
+    assert.equal(ocrCalls, 1);
     assert.equal(deleted, 1);
     assert.equal(timeoutCalls, 1);
     assert.equal(moderationMessages.length, 1);
@@ -1249,7 +1254,7 @@ test("deletes the whole message when only one image matches", async () => {
     await handleMessage(message);
 
     assert.equal(deleted, 1);
-    assert.equal(ocrCalls, 1);
+    assert.equal(ocrCalls, 2);
     assert.equal(channelMessages.length, 1);
     assert.match(channelMessages[0].content, /Message deleted: <@user-1>/);
   } finally {

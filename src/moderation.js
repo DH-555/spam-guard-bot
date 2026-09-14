@@ -92,49 +92,6 @@ async function findMatchingImage(
       const visualMatch = visualMatcher ? await visualMatcher.match(image) : null;
       const visualMs = performance.now() - visualStartedAt;
 
-      let ocrText = null;
-
-      // A visual match can return before the regular OCR pass. Run OCR first
-      // when the malicious-server blocklist is in use so an invite printed in
-      // the image is still resolved and checked against its destination guild.
-      if (
-        shouldCheckMaliciousInvites &&
-        (typeof ocrService.recognize === "function" ||
-          typeof ocrService.recognizeWithFallback === "function")
-      ) {
-        const ocrStartedAt = performance.now();
-        const recognizeOcr = paranoiaLevel === PARANOIA_LEVELS.LOW
-          ? (ocrService.recognize?.bind(ocrService) ??
-            ocrService.recognizeWithFallback?.bind(ocrService))
-          : (ocrService.recognizeWithFallback?.bind(ocrService) ??
-            ocrService.recognize?.bind(ocrService));
-        ocrText = await recognizeOcr(image, {
-          ...(paranoiaLevel === PARANOIA_LEVELS.LOW
-            ? { effort: OCR_EFFORTS.LOW }
-            : {}),
-          shouldStop: (recognizedText) =>
-            containsScamPhrase(recognizedText, paranoiaLevel),
-        });
-        const maliciousInvite = await findMaliciousInvite(
-          ocrText,
-          maliciousGuildIds,
-          resolveInvite,
-        );
-
-        if (maliciousInvite) {
-          console.log(
-            `[Image analysis] ${source.label}: malicious server invite found in OCR ` +
-              `(guild ${maliciousInvite.guildId}; OCR ${(performance.now() - ocrStartedAt).toFixed(0)} ms).`,
-          );
-          return {
-            source,
-            kind: "maliciousServerInvite",
-            maliciousInvite,
-            text: ocrText,
-          };
-        }
-      }
-
       if (hasEasterEggMatcher) {
         const easterEggStartedAt = performance.now();
         const easterEggMatch = await easterEggMatcher.match(image);
@@ -166,36 +123,79 @@ async function findMatchingImage(
         };
       }
 
-      if (ocrText !== null) {
-        if (containsScamPhrase(ocrText, paranoiaLevel)) {
-          return { source, kind: "ocr", text: ocrText };
-        }
-      } else if (
-        (typeof ocrService.recognize === "function" ||
-          typeof ocrService.recognizeWithFallback === "function")) {
-        const ocrStartedAt = performance.now();
-        const recognizeOcr = paranoiaLevel === PARANOIA_LEVELS.LOW
-          ? (ocrService.recognize?.bind(ocrService) ??
-            ocrService.recognizeWithFallback?.bind(ocrService))
-          : (ocrService.recognizeWithFallback?.bind(ocrService) ??
-            ocrService.recognize?.bind(ocrService));
-        ocrText = await recognizeOcr(image, {
-          ...(paranoiaLevel === PARANOIA_LEVELS.LOW
-            ? { effort: OCR_EFFORTS.LOW }
-            : {}),
+      const recognizeOcr = ocrService.recognize?.bind(ocrService) ??
+        ocrService.recognizeWithFallback?.bind(ocrService);
+
+      if (recognizeOcr) {
+        const recognizePass = (effort) => recognizeOcr(image, {
+          effort,
           shouldStop: (recognizedText) =>
             containsScamPhrase(recognizedText, paranoiaLevel),
         });
-        const ocrMs = performance.now() - ocrStartedAt;
-        console.log(
-          `[Image analysis] ${source.label}: ` +
-            "no visual match " +
-            `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
-            `OCR ${ocrMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
-        );
+        const lowStartedAt = performance.now();
+        const lowText = await recognizePass(OCR_EFFORTS.LOW);
+        let ocrText = lowText;
+        let maliciousInvite = shouldCheckMaliciousInvites
+          ? await findMaliciousInvite(lowText, maliciousGuildIds, resolveInvite)
+          : null;
 
-        if (containsScamPhrase(ocrText, paranoiaLevel)) {
-          return { source, kind: "ocr", text: ocrText };
+        if (maliciousInvite) {
+          console.log(
+            `[Image analysis] ${source.label}: malicious server invite found in OCR ` +
+              `(guild ${maliciousInvite.guildId}; OCR low ${(performance.now() - lowStartedAt).toFixed(0)} ms).`,
+          );
+          return {
+            source,
+            kind: "maliciousServerInvite",
+            maliciousInvite,
+            text: lowText,
+          };
+        }
+
+        if (containsScamPhrase(lowText, paranoiaLevel) ||
+          paranoiaLevel === PARANOIA_LEVELS.LOW) {
+          const lowMs = performance.now() - lowStartedAt;
+          console.log(
+            `[Image analysis] ${source.label}: no visual match ` +
+              `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
+              `OCR low ${lowMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
+          );
+
+          if (containsScamPhrase(lowText, paranoiaLevel)) {
+            return { source, kind: "ocr", text: lowText };
+          }
+        } else {
+          const highStartedAt = performance.now();
+          const highText = await recognizePass(OCR_EFFORTS.HIGH);
+          ocrText = [lowText, highText].filter(Boolean).join("\n");
+          maliciousInvite = shouldCheckMaliciousInvites
+            ? await findMaliciousInvite(ocrText, maliciousGuildIds, resolveInvite)
+            : null;
+          const ocrMs = performance.now() - lowStartedAt;
+
+          console.log(
+            `[Image analysis] ${source.label}: no visual match ` +
+              `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
+              `OCR low+high ${ocrMs.toFixed(0)} ms; high ${(performance.now() - highStartedAt).toFixed(0)} ms; ` +
+              `total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
+          );
+
+          if (maliciousInvite) {
+            console.log(
+              `[Image analysis] ${source.label}: malicious server invite found in OCR ` +
+                `(guild ${maliciousInvite.guildId}; OCR low+high ${ocrMs.toFixed(0)} ms).`,
+            );
+            return {
+              source,
+              kind: "maliciousServerInvite",
+              maliciousInvite,
+              text: ocrText,
+            };
+          }
+
+          if (containsScamPhrase(ocrText, paranoiaLevel)) {
+            return { source, kind: "ocr", text: ocrText };
+          }
         }
       }
     } catch (error) {
