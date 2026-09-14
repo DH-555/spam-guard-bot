@@ -208,11 +208,17 @@ The bot scans:
 - Images and thumbnails displayed in Discord embeds generated from links.
 - Images and embeds contained in forwarded message snapshots.
 - Every image in a multi-image message.
+- Images sent inside threads, including recently created threads owned by the
+  sender.
 
 Each image is evaluated independently. If any single image contains a matching
 withdrawal keyword and payout keyword, the entire outer message is
 deleted and the user who sent or forwarded it is timed out when Discord allows
 it.
+
+If the match is an OCR, visual-hash, or known source-channel match and the
+message is from the author of a thread created within the last 10 minutes, the
+entire thread is deleted along with the offending message.
 
 You can also add a public easter egg response by dropping meme images into
 `easter-egg photos/`. The bot builds hash signatures from that folder and, when

@@ -39,13 +39,42 @@ export function getMessageImageSources(message) {
   const sources = [];
   const seenUrls = new Set();
 
-  function addSource(url, label, size = null, forwarded = false) {
-    if (!url || seenUrls.has(url) || !isTrustedImageUrl(url)) {
+  function addSource(
+    url,
+    label,
+    size = null,
+    forwarded = false,
+    alternateUrls = [],
+  ) {
+    const candidateUrls = [url, ...alternateUrls]
+      .filter((candidateUrl) => typeof candidateUrl === "string" && candidateUrl);
+    const trustedUrl = candidateUrls.find((candidateUrl) =>
+      isTrustedImageUrl(candidateUrl),
+    );
+
+    if (!trustedUrl || seenUrls.has(trustedUrl)) {
       return;
     }
 
-    seenUrls.add(url);
-    sources.push({ url, label, size, forwarded });
+    for (const candidateUrl of candidateUrls) {
+      if (isTrustedImageUrl(candidateUrl)) {
+        seenUrls.add(candidateUrl);
+      }
+    }
+
+    const source = { url: trustedUrl, label, size, forwarded };
+    const trustedAlternates = candidateUrls.filter((candidateUrl) =>
+      isTrustedImageUrl(candidateUrl) && candidateUrl !== trustedUrl,
+    );
+
+    // Keep alternate CDN URLs available for source-channel detection. This is
+    // particularly useful when Discord gives an embed a proxy URL while the
+    // original URL still contains the attachment's channel id.
+    if (trustedAlternates.length > 0) {
+      source.alternateUrls = [...new Set(trustedAlternates)];
+    }
+
+    sources.push(source);
   }
 
   function collectSources(currentMessage, forwarded = false) {
@@ -53,10 +82,11 @@ export function getMessageImageSources(message) {
       if (isImageAttachment(attachment)) {
         const label = attachment.name ?? attachment.id;
         addSource(
-          attachment.url,
+          attachment.url ?? attachment.proxyURL ?? attachment.proxy_url,
           forwarded ? `Forwarded: ${label}` : label,
           attachment.size,
           forwarded,
+          [attachment.proxyURL, attachment.proxy_url],
         );
       }
     }
@@ -70,6 +100,7 @@ export function getMessageImageSources(message) {
           forwarded ? `Forwarded: ${label}` : label,
           null,
           forwarded,
+          [embed.image.url, embed.image.proxy_url],
         );
       }
 
@@ -81,6 +112,7 @@ export function getMessageImageSources(message) {
           forwarded ? `Forwarded: ${label}` : label,
           null,
           forwarded,
+          [embed.thumbnail.url, embed.thumbnail.proxy_url],
         );
       }
     }

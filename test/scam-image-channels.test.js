@@ -14,6 +14,14 @@ test("extracts a Discord attachment source channel", () => {
   assert.equal(findKnownScamImageChannel(url)?.channelId, "740463504602955806");
 });
 
+test("extracts the channel from an encoded attachment URL inside a Discord proxy URL", () => {
+  const url =
+    "https://images-ext-1.discordapp.net/external/hash/hash/https%3A%2F%2Fcdn.discordapp.com%2Fattachments%2F740463504602955806%2F1540534318554677288%2Fimage.jpg";
+
+  assert.equal(getDiscordAttachmentChannelId(url), "740463504602955806");
+  assert.equal(findKnownScamImageChannel(url)?.channelId, "740463504602955806");
+});
+
 test("does not flag an unknown or non-attachment URL", () => {
   assert.equal(
     findKnownScamImageChannel(

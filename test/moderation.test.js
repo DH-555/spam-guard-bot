@@ -285,6 +285,151 @@ test("times out before deleting spam and removes its single-message thread", asy
   assert.equal(threadDeleted, 1);
 });
 
+test("detects a malicious forwarded image and moderates the outer message", async () => {
+  let deleted = 0;
+  let timeoutCalls = 0;
+  const user = {
+    id: "forwarding-user",
+    tag: "forwarding-user#0001",
+    bot: false,
+    displayAvatarURL: () => "https://example.com/avatar.png",
+    toString: () => "<@forwarding-user>",
+  };
+  const forwardedMessage = {
+    attachments: new Map([
+      ["forwarded-image", {
+        id: "forwarded-image",
+        name: "scam.png",
+        contentType: "image/png",
+        size: 100,
+        url: "https://cdn.discordapp.com/attachments/740463504602955806/1540534318554677288/scam.png",
+      }],
+    ]),
+    embeds: [],
+    messageSnapshots: new Map(),
+  };
+  const message = {
+    id: "forwarded-message",
+    guildId: "guild-1",
+    channelId: "channel-1",
+    content: "",
+    author: user,
+    channel: {
+      isTextBased: () => true,
+      isSendable: () => true,
+      send: async () => {},
+    },
+    guild: { preferredLocale: "en-US", ownerId: "owner-1" },
+    attachments: new Map(),
+    embeds: [],
+    messageSnapshots: new Map([["snapshot", forwardedMessage]]),
+    member: {
+      moderatable: true,
+      permissions: { has: () => false },
+      timeout: async () => { timeoutCalls += 1; },
+    },
+    delete: async () => { deleted += 1; },
+    webhookId: null,
+    inGuild: () => true,
+  };
+
+  const handleMessage = createMessageHandler({
+    client: {},
+    config: { timeoutMs: 60_000 },
+    ocrService: { recognize: async () => "" },
+    settingsStore: {
+      getModerationChannelId: () => null,
+      getParanoiaLevel: () => "high",
+      getExcludedRoleIds: () => [],
+      getExcludedAdministrators: () => true,
+      getTimeoutMs: () => null,
+      getRaidProtection: () => ({ enabled: false }),
+      getSpamProtection: () => ({ enabled: false }),
+    },
+  });
+
+  await handleMessage(message);
+
+  assert.equal(deleted, 1);
+  assert.equal(timeoutCalls, 1);
+});
+
+test("detects a malicious image sent in a recently created author-owned thread and deletes the thread", async () => {
+  const events = [];
+  const now = Date.now();
+  const user = {
+    id: "thread-image-user",
+    tag: "thread-image-user#0001",
+    bot: false,
+    displayAvatarURL: () => "https://example.com/avatar.png",
+    toString: () => "<@thread-image-user>",
+  };
+  const thread = {
+    id: "thread-image-1",
+    ownerId: user.id,
+    createdTimestamp: now - 1_000,
+    isThread: () => true,
+    isTextBased: () => true,
+    isSendable: () => true,
+    messages: {
+      fetch: async () => new Map([
+        ["earlier-message", {}],
+        ["thread-image-message", message],
+      ]),
+    },
+    delete: async () => events.push("thread-delete"),
+    send: async () => {},
+  };
+  const message = {
+    id: "thread-image-message",
+    guildId: "guild-1",
+    channelId: thread.id,
+    createdTimestamp: now,
+    content: "",
+    author: user,
+    channel: thread,
+    guild: { preferredLocale: "en-US", ownerId: "owner-1" },
+    attachments: new Map([
+      ["scam-image", {
+        id: "scam-image",
+        name: "scam.png",
+        contentType: "image/png",
+        size: 100,
+        url: "https://cdn.discordapp.com/attachments/740463504602955806/1540534318554677288/scam.png",
+      }],
+    ]),
+    embeds: [],
+    messageSnapshots: new Map(),
+    member: {
+      moderatable: true,
+      permissions: { has: () => false },
+      timeout: async () => events.push("timeout"),
+    },
+    delete: async () => events.push("message-delete"),
+    webhookId: null,
+    inGuild: () => true,
+  };
+
+  const handleMessage = createMessageHandler({
+    client: {},
+    config: { timeoutMs: 60_000 },
+    ocrService: { recognize: async () => "" },
+    settingsStore: {
+      getModerationChannelId: () => null,
+      getParanoiaLevel: () => "high",
+      getExcludedRoleIds: () => [],
+      getExcludedAdministrators: () => true,
+      getTimeoutMs: () => null,
+      getRaidProtection: () => ({ enabled: false }),
+      getSpamProtection: () => ({ enabled: false }),
+    },
+  });
+
+  await handleMessage(message);
+
+  assert.deepEqual(events, ["timeout", "message-delete", "thread-delete"]);
+});
+
 test("anti-raid deletes a message starter and the thread it created", async () => {
   const deletedMessages = [];
   const deletedThreads = [];

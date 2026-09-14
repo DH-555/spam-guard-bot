@@ -24,6 +24,7 @@ import { findKnownScamImageChannel } from "./scam-image-channels.js";
 
 const REASON =
   "Image detected by moderation rules.";
+const RECENT_THREAD_WINDOW_MS = 10 * 60_000;
 
 function resultLabel(result, locale) {
   if (result.status === "fulfilled") {
@@ -46,7 +47,12 @@ async function findMatchingImage(
     easterEggMatcher && easterEggMatcher.references?.length > 0;
 
   for (const source of imageSources) {
-    const knownScamImageChannel = findKnownScamImageChannel(source.url);
+    const knownScamImageChannel = [
+      source.url,
+      ...(source.alternateUrls ?? []),
+    ]
+      .map((url) => findKnownScamImageChannel(url))
+      .find(Boolean);
 
     if (knownScamImageChannel) {
       console.log(
@@ -480,6 +486,52 @@ function getThreadTitle(message) {
   return typeof thread?.name === "string" ? thread.name : "";
 }
 
+function getTimestamp(value) {
+  if (Number.isFinite(value)) {
+    return value;
+  }
+
+  if (value instanceof Date && Number.isFinite(value.getTime())) {
+    return value.getTime();
+  }
+
+  return null;
+}
+
+function getSnowflakeTimestamp(value) {
+  if (typeof value !== "string" || !/^\d{17,20}$/u.test(value)) {
+    return null;
+  }
+
+  try {
+    return Number((BigInt(value) >> 22n) + 1_420_070_400_000n);
+  } catch {
+    return null;
+  }
+}
+
+function getEntityTimestamp(entity) {
+  return getTimestamp(entity?.createdTimestamp) ??
+    getTimestamp(entity?.createdAt) ??
+    getSnowflakeTimestamp(entity?.id);
+}
+
+function isRecentlyCreatedAuthorThread(message, thread) {
+  if (!thread || thread.ownerId !== message.author.id) {
+    return false;
+  }
+
+  const threadTimestamp = getEntityTimestamp(thread);
+  const messageTimestamp = getEntityTimestamp(message);
+
+  if (threadTimestamp === null || messageTimestamp === null) {
+    return false;
+  }
+
+  const elapsed = messageTimestamp - threadTimestamp;
+  return elapsed >= 0 && elapsed <= RECENT_THREAD_WINDOW_MS;
+}
+
 async function deleteMessageAndSingleMessageThread(message) {
   const startedThread = getThreadStartedByMessage(message);
   const thread = message.channel?.isThread?.() &&
@@ -490,11 +542,15 @@ async function deleteMessageAndSingleMessageThread(message) {
   let shouldDeleteThread = false;
 
   if (thread) {
-    try {
-      const threadMessages = await thread.messages.fetch({ limit: 2 });
-      shouldDeleteThread = threadMessages.size === 1 && threadMessages.has(message.id);
-    } catch (error) {
-      console.warn(`[Moderation] Could not inspect thread ${thread.id} before deletion:`, error);
+    shouldDeleteThread = isRecentlyCreatedAuthorThread(message, thread);
+
+    if (!shouldDeleteThread) {
+      try {
+        const threadMessages = await thread.messages.fetch({ limit: 2 });
+        shouldDeleteThread = threadMessages.size === 1 && threadMessages.has(message.id);
+      } catch (error) {
+        console.warn(`[Moderation] Could not inspect thread ${thread.id} before deletion:`, error);
+      }
     }
   }
 

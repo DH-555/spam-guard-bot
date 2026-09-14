@@ -6,6 +6,8 @@ const scamImageChannelsPath = fileURLToPath(
   new URL("../scam-image-channels.json", import.meta.url),
 );
 const DISCORD_SNOWFLAKE = /^\d{17,20}$/u;
+const ATTACHMENT_CHANNEL_PATTERN =
+  /(?:^|\/)(?:attachments|ephemeral-attachments)\/(\d{17,20})(?:\/|$)/u;
 
 function loadScamImageChannels() {
   try {
@@ -50,15 +52,24 @@ export function getDiscordAttachmentChannelId(url) {
     return null;
   }
 
+  const candidates = [url];
+
   try {
-    const parsedUrl = new URL(url);
-    const match = parsedUrl.pathname.match(
-      /^\/attachments\/(\d{17,20})(?:\/|$)/u,
-    );
-    return match?.[1] ?? null;
+    candidates.push(decodeURIComponent(url));
   } catch {
-    return null;
+    // The raw URL is still safe to inspect when a proxy URL is partially
+    // encoded or contains an invalid escape sequence.
   }
+
+  for (const candidate of candidates) {
+    const match = candidate.match(ATTACHMENT_CHANNEL_PATTERN);
+
+    if (match?.[1]) {
+      return match[1];
+    }
+  }
+
+  return null;
 }
 
 export function findKnownScamImageChannel(
