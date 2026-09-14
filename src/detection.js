@@ -1,3 +1,5 @@
+import { findBlockedDomain } from "./blocked-links.js";
+
 const WITHDRAWAL_KEYWORDS = ["WITHDRAWAL"];
 const SUCCESS_KEYWORDS = ["SUCCESS", "SUCCEEDED", "SUCCESSFUL", "SUCCESSFULLY"];
 const USDT_KEYWORDS = ["USDT"];
@@ -95,6 +97,10 @@ function hasAnyPhrase(text, phrases) {
   return phrases.some((phrase) => containsPhrase(text, phrase));
 }
 
+export function containsBlockedDomain(text) {
+  return findBlockedDomain(text) !== null;
+}
+
 export function normalizeOcrText(text) {
   return text
     .normalize("NFKD")
@@ -104,6 +110,10 @@ export function normalizeOcrText(text) {
 
 export function containsScamPhrase(text, paranoiaLevel = DEFAULT_PARANOIA_LEVEL) {
   const normalizedLevel = normalizeParanoiaLevel(paranoiaLevel);
+
+  if (containsBlockedDomain(text)) {
+    return true;
+  }
 
   if (normalizedLevel === PARANOIA_LEVELS.LOW) {
     return false;

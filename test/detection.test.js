@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   containsScamPhrase,
+  containsBlockedDomain,
   findSuspiciousText,
   DEFAULT_PARANOIA_LEVEL,
   PARANOIA_LEVELS,
@@ -47,11 +48,24 @@ test("requires all OCR keywords at medium paranoia", () => {
   );
 });
 
-test("treats low paranoia as hash only", () => {
+test("does not use regular OCR keywords at low paranoia", () => {
   assert.equal(
     containsScamPhrase("Withdrawal\nSUCCESS", PARANOIA_LEVELS.LOW),
     false,
   );
+});
+
+test("detects blocked domains in OCR at every paranoia level", () => {
+  for (const level of Object.values(PARANOIA_LEVELS)) {
+    assert.equal(
+      containsScamPhrase("Promoción: https://www.wenowin.com/bonus", level),
+      true,
+      `expected a match at ${level} paranoia`,
+    );
+  }
+
+  assert.equal(containsBlockedDomain("betchoco.com"), true);
+  assert.equal(containsBlockedDomain("safe.example"), false);
 });
 
 test("allows the required keywords to be far apart", () => {

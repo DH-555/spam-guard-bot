@@ -161,6 +161,93 @@ test("moderates and posts a fallback notice when no moderation channel is config
   }
 });
 
+test("checks malicious image domains with the low paranoia OCR pass", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
+
+  try {
+    let deleted = 0;
+    let ocrOptions;
+    const message = {
+      id: "low-paranoia-domain",
+      guildId: "guild-1",
+      channelId: "channel-1",
+      content: "",
+      author: {
+        id: "user-low-paranoia",
+        tag: "tester#0001",
+        bot: false,
+        displayAvatarURL: () => "https://example.com/avatar.png",
+        toString: () => "<@user-low-paranoia>",
+      },
+      channel: {
+        isTextBased: () => true,
+        isSendable: () => true,
+        send: async () => {},
+      },
+      guild: {
+        preferredLocale: "en-US",
+        ownerId: "owner-1",
+      },
+      attachments: new Map([
+        [
+          "attachment-1",
+          {
+            id: "attachment-1",
+            name: "domain.png",
+            contentType: "image/png",
+            size: imageBuffer.length,
+            url: imageUrl("domain"),
+          },
+        ],
+      ]),
+      embeds: [],
+      messageSnapshots: new Map(),
+      member: {
+        moderatable: true,
+        permissions: { has: () => false },
+        timeout: async () => {},
+      },
+      delete: async () => {
+        deleted += 1;
+      },
+      webhookId: null,
+      inGuild: () => true,
+    };
+
+    const handleMessage = createMessageHandler({
+      client: {},
+      config: {
+        maxImageBytes: 1024,
+        maxImagePixels: 16_000_000,
+        imageDownloadTimeoutMs: 1000,
+        timeoutMs: 60_000,
+      },
+      ocrService: {
+        recognize: async (_image, options) => {
+          ocrOptions = options;
+          return "Visit wenowin.com";
+        },
+      },
+      settingsStore: {
+        getModerationChannelId: () => null,
+        getParanoiaLevel: () => "low",
+        getExcludedRoleIds: () => [],
+        getExcludedAdministrators: () => true,
+        getTimeoutMs: () => null,
+      },
+    });
+
+    await handleMessage(message);
+
+    assert.equal(ocrOptions.effort, "low");
+    assert.equal(deleted, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("blocks a listed spam message without requiring an image", async () => {
   const channelMessages = [];
   let deleted = 0;
@@ -647,6 +734,107 @@ test("does not moderate malicious server invites when protection is disabled", a
 
   assert.equal(deleted, 0);
   assert.equal(timeoutCalls, 0);
+});
+
+test("resolves malicious Discord invites found inside image OCR", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
+
+  try {
+    const moderationMessages = [];
+    let deleted = 0;
+    let timeoutCalls = 0;
+    let resolvedCode = null;
+    const message = {
+      id: "malicious-image-invite-message",
+      guildId: "guild-1",
+      channelId: "channel-1",
+      content: "",
+      author: {
+        id: "image-spammer",
+        tag: "image-spammer#0001",
+        bot: false,
+        displayAvatarURL: () => "https://example.com/avatar.png",
+        toString: () => "<@image-spammer>",
+      },
+      channel: {
+        isTextBased: () => true,
+        isSendable: () => true,
+        send: async () => {},
+        toString: () => "<#channel-1>",
+      },
+      guild: { preferredLocale: "en-US", ownerId: "owner-1" },
+      attachments: new Map([
+        ["invite-image", {
+          id: "invite-image",
+          name: "invite.png",
+          contentType: "image/png",
+          size: imageBuffer.length,
+          url: imageUrl("invite"),
+        }],
+      ]),
+      embeds: [],
+      messageSnapshots: new Map(),
+      member: {
+        moderatable: true,
+        permissions: { has: () => false },
+        timeout: async () => { timeoutCalls += 1; },
+      },
+      delete: async () => { deleted += 1; },
+      webhookId: null,
+      inGuild: () => true,
+    };
+
+    const handleMessage = createMessageHandler({
+      client: {
+        fetchInvite: async (code) => {
+          if (code === "PIPER") {
+            throw new Error("Invite codes are lower-case in this test.");
+          }
+          resolvedCode = code;
+          return { guild: { id: "123456789012345678" } };
+        },
+        channels: {
+          fetch: async () => ({
+            isTextBased: () => true,
+            isSendable: () => true,
+            send: async (payload) => moderationMessages.push(payload),
+          }),
+        },
+      },
+      config: {
+        maxImageBytes: 4096,
+        maxImagePixels: 16_000_000,
+        imageDownloadTimeoutMs: 1000,
+        timeoutMs: 60_000,
+      },
+      ocrService: {
+        recognize: async () => "JOIN DISCORD.GG/PIPER FOR MORE",
+      },
+      maliciousGuildIds: ["123456789012345678"],
+      settingsStore: {
+        getModerationChannelId: () => "moderation-channel",
+        getParanoiaLevel: () => "high",
+        getExcludedRoleIds: () => [],
+        getExcludedAdministrators: () => true,
+        getTimeoutMs: () => null,
+        getMaliciousServerProtection: () => ({ enabled: true, blockedGuildIds: [] }),
+      },
+    });
+
+    await handleMessage(message);
+
+    assert.equal(resolvedCode, "piper");
+    assert.equal(deleted, 1);
+    assert.equal(timeoutCalls, 1);
+    assert.equal(moderationMessages.length, 1);
+    assert.equal(moderationMessages[0].embeds[0].data.title, "Malicious server invite blocked");
+    assert.match(moderationMessages[0].embeds[0].data.fields[2].value, /123456789012345678/);
+    assert.match(moderationMessages[0].embeds[0].data.fields[7].value, /DISCORD\.GG\/PIPER/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("blocks invites to servers with NSFW names and alerts moderators", async () => {

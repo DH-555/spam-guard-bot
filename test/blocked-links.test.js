@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findBlockedLink } from "../src/blocked-links.js";
+import {
+  BLOCKED_DOMAINS,
+  findBlockedDomain,
+  findBlockedLink,
+} from "../src/blocked-links.js";
 
 test("detects the blocked SurveyBuilder link in message text", () => {
   assert.ok(findBlockedLink("Mira esto: https://surveybuilder.io/c/capture/MHNKQThUS3A"));
@@ -37,4 +41,17 @@ test("detects blocked domains and their subdomains", () => {
 test("does not block domains that only contain a blocked domain as a suffix", () => {
   assert.equal(findBlockedLink("https://notzangi.com"), null);
   assert.equal(findBlockedLink("https://zangi.com.example.org"), null);
+});
+
+test("uses the global blocked domain list for OCR text", () => {
+  for (const domain of BLOCKED_DOMAINS) {
+    assert.equal(findBlockedDomain(domain), domain);
+  }
+
+  assert.equal(findBlockedDomain("WENOWIN.COM."), "wenowin.com");
+  assert.equal(findBlockedDomain("https://www.ketsowin.com/promo"), "ketsowin.com");
+  assert.equal(findBlockedDomain("bogamb . at"), "bogamb.at");
+  assert.equal(findBlockedDomain("notwenowin.com"), null);
+  assert.equal(findBlockedDomain("wenowin.com.example"), null);
+  assert.equal(findBlockedLink("Visita wenowin.com"), "wenowin.com");
 });

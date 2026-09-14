@@ -21,6 +21,7 @@ import { findSpamMessage, getSpamText } from "./spam-messages.js";
 import { isKnownSpamUser } from "./spam-users.js";
 import { createDetectionFeedback } from "./detection-feedback.js";
 import { findKnownScamImageChannel } from "./scam-image-channels.js";
+import { OCR_EFFORTS } from "./ocr.js";
 
 const REASON =
   "Image detected by moderation rules.";
@@ -41,10 +42,14 @@ async function findMatchingImage(
   visualMatcher,
   easterEggMatcher,
   paranoiaLevel,
+  resolveInvite,
+  maliciousGuildIds,
 ) {
   const imageSources = getMessageImageSources(message);
   const hasEasterEggMatcher =
     easterEggMatcher && easterEggMatcher.references?.length > 0;
+  const shouldCheckMaliciousInvites =
+    typeof resolveInvite === "function" && maliciousGuildIds?.length > 0;
 
   for (const source of imageSources) {
     const knownScamImageChannel = [
@@ -87,6 +92,49 @@ async function findMatchingImage(
       const visualMatch = visualMatcher ? await visualMatcher.match(image) : null;
       const visualMs = performance.now() - visualStartedAt;
 
+      let ocrText = null;
+
+      // A visual match can return before the regular OCR pass. Run OCR first
+      // when the malicious-server blocklist is in use so an invite printed in
+      // the image is still resolved and checked against its destination guild.
+      if (
+        shouldCheckMaliciousInvites &&
+        (typeof ocrService.recognize === "function" ||
+          typeof ocrService.recognizeWithFallback === "function")
+      ) {
+        const ocrStartedAt = performance.now();
+        const recognizeOcr = paranoiaLevel === PARANOIA_LEVELS.LOW
+          ? (ocrService.recognize?.bind(ocrService) ??
+            ocrService.recognizeWithFallback?.bind(ocrService))
+          : (ocrService.recognizeWithFallback?.bind(ocrService) ??
+            ocrService.recognize?.bind(ocrService));
+        ocrText = await recognizeOcr(image, {
+          ...(paranoiaLevel === PARANOIA_LEVELS.LOW
+            ? { effort: OCR_EFFORTS.LOW }
+            : {}),
+          shouldStop: (recognizedText) =>
+            containsScamPhrase(recognizedText, paranoiaLevel),
+        });
+        const maliciousInvite = await findMaliciousInvite(
+          ocrText,
+          maliciousGuildIds,
+          resolveInvite,
+        );
+
+        if (maliciousInvite) {
+          console.log(
+            `[Image analysis] ${source.label}: malicious server invite found in OCR ` +
+              `(guild ${maliciousInvite.guildId}; OCR ${(performance.now() - ocrStartedAt).toFixed(0)} ms).`,
+          );
+          return {
+            source,
+            kind: "maliciousServerInvite",
+            maliciousInvite,
+            text: ocrText,
+          };
+        }
+      }
+
       if (hasEasterEggMatcher) {
         const easterEggStartedAt = performance.now();
         const easterEggMatch = await easterEggMatcher.match(image);
@@ -118,12 +166,23 @@ async function findMatchingImage(
         };
       }
 
-      if (paranoiaLevel !== PARANOIA_LEVELS.LOW) {
+      if (ocrText !== null) {
+        if (containsScamPhrase(ocrText, paranoiaLevel)) {
+          return { source, kind: "ocr", text: ocrText };
+        }
+      } else if (
+        (typeof ocrService.recognize === "function" ||
+          typeof ocrService.recognizeWithFallback === "function")) {
         const ocrStartedAt = performance.now();
-        const recognizeOcr =
-          ocrService.recognizeWithFallback?.bind(ocrService) ??
-          ocrService.recognize.bind(ocrService);
-        const text = await recognizeOcr(image, {
+        const recognizeOcr = paranoiaLevel === PARANOIA_LEVELS.LOW
+          ? (ocrService.recognize?.bind(ocrService) ??
+            ocrService.recognizeWithFallback?.bind(ocrService))
+          : (ocrService.recognizeWithFallback?.bind(ocrService) ??
+            ocrService.recognize?.bind(ocrService));
+        ocrText = await recognizeOcr(image, {
+          ...(paranoiaLevel === PARANOIA_LEVELS.LOW
+            ? { effort: OCR_EFFORTS.LOW }
+            : {}),
           shouldStop: (recognizedText) =>
             containsScamPhrase(recognizedText, paranoiaLevel),
         });
@@ -135,15 +194,9 @@ async function findMatchingImage(
             `OCR ${ocrMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
         );
 
-        if (containsScamPhrase(text, paranoiaLevel)) {
-          return { source, kind: "ocr", text };
+        if (containsScamPhrase(ocrText, paranoiaLevel)) {
+          return { source, kind: "ocr", text: ocrText };
         }
-      } else {
-        console.log(
-          `[Image analysis] ${source.label}: no visual match ` +
-            `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
-            `OCR skipped by paranoia level; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
-        );
       }
     } catch (error) {
       console.error(`[Image analysis] Could not analyze ${source.label}:`, error);
@@ -329,6 +382,7 @@ async function sendMaliciousServerAlert(
   timeoutMs,
   moderationChannelId,
   locale,
+  recognizedText = null,
 ) {
   if (!moderationChannelId) {
     await sendFallbackNotice(message, locale);
@@ -351,7 +405,15 @@ async function sendMaliciousServerAlert(
         { name: t(locale, "moderation", "timeout", Math.round(timeoutMs / 60_000)), value: resultLabel(timeoutResult, locale), inline: true },
         { name: t(locale, "moderation", "messageDeleted"), value: resultLabel(deleteResult, locale), inline: true },
       )
-      .addFields({ name: t(locale, "moderation", "message"), value: truncateText(message.content) })
+      .addFields(
+        { name: t(locale, "moderation", "message"), value: truncateText(message.content) },
+        ...(recognizedText !== null
+          ? [{
+              name: t(locale, "moderation", "recognizedText"),
+              value: truncateText(recognizedText) || t(locale, "moderation", "emptyText"),
+            }]
+          : []),
+      )
       .setTimestamp()],
     allowedMentions: { parse: [] },
   });
@@ -787,6 +849,10 @@ export function createMessageHandler({
       visualMatcher,
       easterEggMatcher,
       paranoiaLevel,
+      resolveInvite,
+      maliciousServer.enabled
+        ? [...maliciousGuildIds, ...maliciousServer.blockedGuildIds]
+        : [],
     );
 
     if (!match) {
@@ -800,6 +866,33 @@ export function createMessageHandler({
         console.error("[Moderation] Could not send the easter egg reply:", error);
       }
 
+      return;
+    }
+
+    if (match.kind === "maliciousServerInvite") {
+      const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
+        message,
+        member,
+        timeoutMs,
+        "Malicious server invite found in image OCR.",
+        locale,
+      );
+
+      try {
+        await sendMaliciousServerAlert(
+          client,
+          message,
+          match.maliciousInvite,
+          timeoutResult,
+          deleteResult,
+          timeoutMs,
+          moderationChannelId,
+          locale,
+          match.text,
+        );
+      } catch (error) {
+        console.error("[Malicious server protection] Could not send the notification:", error);
+      }
       return;
     }
 

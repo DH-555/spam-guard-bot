@@ -26,13 +26,23 @@ The keywords:
 - Can appear on different lines or far apart in the image.
 - Must appear as complete words.
 
+The OCR also checks the domains listed in
+[`blocked-domains.json`](blocked-domains.json). A match in that list is
+sufficient to detect the image at every paranoia level, including `low`. At
+that level the bot runs only the low-cost OCR pass for this check. The same
+list is also used for blocked domains in regular message text, with or without
+a URL protocol.
+
 You can tune the detection sensitivity per server with `/setup paranoia`:
 
-- `low` - exact visual hash match only.
+- `low` - exact visual hash match or a domain from the blocked domain list.
 - `medium` - visual hash match or OCR text containing `Withdrawal`, `Succeeded`, and `USDT`.
 - `high` - visual hash match or OCR text containing `Withdrawal` and either `Succeeded` or `USDT`.
 
 The default paranoia level is `high`.
+
+The blocked domain list is copied into the Docker image. Rebuild and redeploy
+the image after changing it.
 
 ## Known scam-image source channels
 
@@ -120,8 +130,8 @@ protection per server:
 `https://agentrouter.org/register?aff=QaiK`
 
 También se pueden bloquear dominios completos, incluidos sus subdominios. El
-listado global está en [blocked-domains.json](blocked-domains.json). Actualmente
-incluye `zangi.com`.
+listado global está en [blocked-domains.json](blocked-domains.json). Incluye
+`zangi.com` y los dominios maliciosos detectados por OCR en imágenes.
 
 ## Manual spam reports
 
@@ -142,6 +152,12 @@ When a message contains an invitation to a blocked server, the bot deletes the
 message, applies the configured timeout to the author, and sends a moderation
 alert. A new invite link to the same server is still blocked because matching
 uses the destination server ID, not the invite code.
+
+The same check is also applied to invitation links recognized by OCR inside an
+image. For example, an image containing `discord.gg/example` is parsed, the
+invite is resolved through Discord, and its destination server ID is compared
+with the same global and per-server blocklists. The moderation alert includes
+the recognized text, invite code, and resolved server ID.
 
 The global blocklist is [malicious-servers.json](malicious-servers.json) at the
 repository root. Add one Discord server ID per JSON array entry:
