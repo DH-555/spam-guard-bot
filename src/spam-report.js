@@ -71,6 +71,12 @@ export async function handleSpamReportMessage(message) {
     } catch (replyError) {
       console.error("[Spam report] Could not send the error response:", replyError);
     }
+  } finally {
+    try {
+      await message.delete?.();
+    } catch (error) {
+      console.warn(`[Spam report] Could not delete command message ${message.id}:`, error);
+    }
   }
 
   return true;

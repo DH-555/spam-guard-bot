@@ -80,3 +80,24 @@ test("!spamreport deletes the reported message and its single-message thread", a
   assert.match(replies[0].content, /Usuario puesto en timeout/);
   assert.match(replies[0].content, /eliminados: 1/);
 });
+
+test("!spamreport deletes its command message and rejects non-moderators", async () => {
+  const events = [];
+  const replies = [];
+  const reporter = {
+    id: "command-message",
+    author: { id: "reporter", bot: false, tag: "reporter#0001" },
+    content: "!spamreport",
+    member: { permissions: { has: () => false } },
+    inGuild: () => true,
+    reply: async (payload) => replies.push(payload),
+    delete: async () => events.push("command-delete"),
+  };
+
+  const handled = await handleSpamReportMessage(reporter);
+
+  assert.equal(handled, true);
+  assert.deepEqual(events, ["command-delete"]);
+  assert.equal(replies.length, 1);
+  assert.equal(replies[0].content, "Necesitas permiso para gestionar mensajes.");
+});
