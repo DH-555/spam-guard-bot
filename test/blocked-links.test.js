@@ -55,3 +55,9 @@ test("uses the global blocked domain list for OCR text", () => {
   assert.equal(findBlockedDomain("wenowin.com.example"), null);
   assert.equal(findBlockedLink("Visita wenowin.com"), "wenowin.com");
 });
+
+test("recognizes blocked domains when OCR inserts spaces into the hostname", () => {
+  assert.equal(findBlockedDomain("we nowin.com"), "wenowin.com");
+  assert.equal(findBlockedDomain("wenowin com"), "wenowin.com");
+  assert.equal(findBlockedDomain("wenowin . com"), "wenowin.com");
+});

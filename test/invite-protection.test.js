@@ -26,6 +26,17 @@ test("extracts Discord invite codes from supported link formats", () => {
   );
 });
 
+test("limits invite extraction to avoid API and cache abuse", () => {
+  const content = Array.from(
+    { length: 32 },
+    (_, index) => "https://discord.gg/unique-" + index,
+  ).join(" ");
+  const codes = extractDiscordInviteCodes(content);
+
+  assert.equal(codes.length, 16);
+  assert.deepEqual(extractDiscordInviteCodes("https://discord.gg/" + "a".repeat(65)), []);
+});
+
 test("extracts obfuscated and URL-encoded invite codes", () => {
   assert.deepEqual(
     extractDiscordInviteCodes(

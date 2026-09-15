@@ -22,10 +22,15 @@ import { isKnownSpamUser } from "./spam-users.js";
 import { createDetectionFeedback } from "./detection-feedback.js";
 import { findKnownScamImageChannel } from "./scam-image-channels.js";
 import { OCR_EFFORTS } from "./ocr.js";
+import { escapeDiscordMarkdown, sanitizeLogText } from "./security.js";
 
 const REASON =
   "Image detected by moderation rules.";
 const RECENT_THREAD_WINDOW_MS = 10 * 60_000;
+
+function safeEmbedText(value, maxLength = 900) {
+  return escapeDiscordMarkdown(truncateText(value, maxLength), maxLength);
+}
 
 function resultLabel(result, locale) {
   if (result.status === "fulfilled") {
@@ -61,7 +66,7 @@ async function findMatchingImage(
 
     if (knownScamImageChannel) {
       console.log(
-        `[Image analysis] ${source.label}: known scam-image source channel ` +
+        `[Image analysis] ${sanitizeLogText(source.label)}: known scam-image source channel ` +
           `${knownScamImageChannel.channelId} (${knownScamImageChannel.name}).`,
       );
       return {
@@ -73,7 +78,7 @@ async function findMatchingImage(
 
     if (source.size !== null && source.size > config.maxImageBytes) {
       console.warn(
-        `[OCR] Image skipped because of its size (${source.size} bytes): ${source.label}`,
+        `[OCR] Image skipped because of its size (${source.size} bytes): ${sanitizeLogText(source.label)}`,
       );
       continue;
     }
@@ -99,7 +104,7 @@ async function findMatchingImage(
 
         if (easterEggMatch) {
           console.log(
-            `[Image analysis] ${source.label}: easter egg match "${easterEggMatch.reference.label}" ` +
+            `[Image analysis] ${sanitizeLogText(source.label)}: easter egg match "${sanitizeLogText(easterEggMatch.reference.label)}" ` +
               `(download ${downloadMs.toFixed(0)} ms; hash ${easterEggMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
           );
           return {
@@ -112,7 +117,7 @@ async function findMatchingImage(
 
       if (visualMatch) {
         console.log(
-          `[Image analysis] ${source.label}: visual match "${visualMatch.reference.label}" ` +
+          `[Image analysis] ${sanitizeLogText(source.label)}: visual match "${sanitizeLogText(visualMatch.reference.label)}" ` +
             `(distance ${visualMatch.distance}; download ${downloadMs.toFixed(0)} ms; ` +
             `hash ${visualMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
         );
@@ -141,7 +146,7 @@ async function findMatchingImage(
 
         if (maliciousInvite) {
           console.log(
-            `[Image analysis] ${source.label}: malicious server invite found in OCR ` +
+            `[Image analysis] ${sanitizeLogText(source.label)}: malicious server invite found in OCR ` +
               `(guild ${maliciousInvite.guildId}; OCR low ${(performance.now() - lowStartedAt).toFixed(0)} ms).`,
           );
           return {
@@ -157,7 +162,7 @@ async function findMatchingImage(
           paranoiaLevel === PARANOIA_LEVELS.LOW) {
           const lowMs = performance.now() - lowStartedAt;
           console.log(
-            `[Image analysis] ${source.label}: no visual match ` +
+            `[Image analysis] ${sanitizeLogText(source.label)}: no visual match ` +
               `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
               `OCR ${ocrService.singlePass ? "single-pass" : "low"} ${lowMs.toFixed(0)} ms; ` +
               `total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
@@ -176,7 +181,7 @@ async function findMatchingImage(
           const ocrMs = performance.now() - lowStartedAt;
 
           console.log(
-            `[Image analysis] ${source.label}: no visual match ` +
+            `[Image analysis] ${sanitizeLogText(source.label)}: no visual match ` +
               `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
               `OCR low+high ${ocrMs.toFixed(0)} ms; high ${(performance.now() - highStartedAt).toFixed(0)} ms; ` +
               `total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
@@ -184,7 +189,7 @@ async function findMatchingImage(
 
           if (maliciousInvite) {
             console.log(
-              `[Image analysis] ${source.label}: malicious server invite found in OCR ` +
+              `[Image analysis] ${sanitizeLogText(source.label)}: malicious server invite found in OCR ` +
                 `(guild ${maliciousInvite.guildId}; OCR low+high ${ocrMs.toFixed(0)} ms).`,
             );
             return {
@@ -201,7 +206,7 @@ async function findMatchingImage(
         }
       }
     } catch (error) {
-      console.error(`[Image analysis] Could not analyze ${source.label}:`, error);
+      console.error(`[Image analysis] Could not analyze ${sanitizeLogText(source.label)}:`, error);
     }
   }
 
@@ -233,7 +238,7 @@ async function sendModerationAlert(
           locale,
           "moderation",
           "visualMatch",
-          match.visualMatch.reference.label,
+          safeEmbedText(match.visualMatch.reference.label, 256),
           match.visualMatch.distance,
         )
       : match.kind === "knownScamImageChannel"
@@ -241,7 +246,7 @@ async function sendModerationAlert(
             locale,
             "moderation",
             "knownScamImageChannel",
-            match.knownScamImageChannel.name,
+            safeEmbedText(match.knownScamImageChannel.name, 256),
             match.knownScamImageChannel.channelId,
           )
       : match.kind === "easterEgg"
@@ -266,7 +271,7 @@ async function sendModerationAlert(
       },
       {
         name: t(locale, "moderation", "imageSource"),
-        value: truncateText(match.source.label, 1024),
+        value: safeEmbedText(match.source.label, 1024),
         inline: true,
       },
       {
@@ -292,7 +297,7 @@ async function sendModerationAlert(
                 "moderation",
                 match.kind === "visual" ? "ocrSkipped" : "knownChannelOcrSkipped",
               )
-            : truncateText(match.text) || t(locale, "moderation", "emptyText"),
+            : safeEmbedText(match.text) || t(locale, "moderation", "emptyText"),
       },
     )
     .setThumbnail(message.author.displayAvatarURL())
@@ -301,7 +306,7 @@ async function sendModerationAlert(
   const feedback = match.kind === "ocr" ? createDetectionFeedback(match, message) : null;
 
   await channel.send({
-    content: t(locale, "moderation", "alertContent", message.author.tag),
+    content: t(locale, "moderation", "alertContent", safeEmbedText(message.author.tag, 128)),
     embeds: [embed],
     ...(feedback ? { components: feedback.components } : {}),
     allowedMentions: { parse: [] },
@@ -329,12 +334,12 @@ async function sendRaidAlert(client, message, entries, timeoutMs, moderationChan
   if (!channel?.isTextBased() || !channel.isSendable()) throw new Error("The configured moderation channel is unavailable.");
   const deletedMessages = entries.map((entry) => `${entry.channelId}: ${entry.message.content || "(empty)"}`).join("\n");
   await channel.send({
-    content: t(locale, "moderation", "raidAlertContent", message.author.tag),
+    content: t(locale, "moderation", "raidAlertContent", safeEmbedText(message.author.tag, 128)),
     embeds: [new EmbedBuilder().setColor(0xed4245).setTitle(t(locale, "moderation", "raidAlertTitle"))
       .addFields(
         { name: t(locale, "moderation", "user"), value: `${message.author} (\`${message.author.id}\`)` },
         { name: t(locale, "moderation", "channel"), value: entries.map((entry) => `<#${entry.channelId}>`).join(", ") },
-        { name: t(locale, "moderation", "raidMessage"), value: truncateText(deletedMessages, 4000) },
+        { name: t(locale, "moderation", "raidMessage"), value: safeEmbedText(deletedMessages, 4000) || "(empty)" },
         { name: t(locale, "moderation", "timeout", Math.round(timeoutMs / 60_000)), value: "Applied" },
       ).setTimestamp()],
     allowedMentions: { parse: [] },
@@ -361,12 +366,12 @@ async function sendSpamAlert(client, message, spamMessage, timeoutResult, delete
 
   const feedback = feedbackMatch ? createDetectionFeedback(feedbackMatch, message) : null;
   await channel.send({
-    content: t(locale, "moderation", "spamAlertContent", message.author.tag),
+    content: t(locale, "moderation", "spamAlertContent", safeEmbedText(message.author.tag, 128)),
     embeds: [new EmbedBuilder().setColor(0xed4245).setTitle(t(locale, "moderation", "spamAlertTitle"))
       .addFields(
         { name: t(locale, "moderation", "user"), value: `${message.author} (\`${message.author.id}\`)` },
         { name: t(locale, "moderation", "channel"), value: `${message.channel} (\`${message.channelId}\`)` },
-        { name: t(locale, "moderation", "spamMessage"), value: truncateText(`Matched: ${spamMessage}\nContent: ${message.content}`) },
+        { name: t(locale, "moderation", "spamMessage"), value: safeEmbedText("Matched: " + spamMessage + "\nContent: " + message.content) || "(empty)" },
         { name: t(locale, "moderation", "timeout", Math.round(timeoutMs / 60_000)), value: resultLabel(timeoutResult, locale), inline: true },
         { name: t(locale, "moderation", "messageDeleted"), value: resultLabel(deleteResult, locale), inline: true },
       ).setTimestamp()],
@@ -397,7 +402,7 @@ async function sendMaliciousServerAlert(
   }
 
   await channel.send({
-    content: t(locale, "moderation", "maliciousServerAlertContent", message.author.tag),
+    content: t(locale, "moderation", "maliciousServerAlertContent", safeEmbedText(message.author.tag, 128)),
     embeds: [new EmbedBuilder().setColor(0xed4245).setTitle(t(locale, "moderation", "maliciousServerAlertTitle"))
       .addFields(
         { name: t(locale, "moderation", "user"), value: `${message.author} (\`${message.author.id}\`)` },
@@ -408,11 +413,11 @@ async function sendMaliciousServerAlert(
         { name: t(locale, "moderation", "messageDeleted"), value: resultLabel(deleteResult, locale), inline: true },
       )
       .addFields(
-        { name: t(locale, "moderation", "message"), value: truncateText(message.content) },
+        { name: t(locale, "moderation", "message"), value: safeEmbedText(message.content) || "(empty)" },
         ...(recognizedText !== null
           ? [{
               name: t(locale, "moderation", "recognizedText"),
-              value: truncateText(recognizedText) || t(locale, "moderation", "emptyText"),
+              value: safeEmbedText(recognizedText) || t(locale, "moderation", "emptyText"),
             }]
           : []),
       )
@@ -442,13 +447,13 @@ async function sendNsfwServerAlert(
   }
 
   await channel.send({
-    content: t(locale, "moderation", "nsfwServerAlertContent", message.author.tag),
+    content: t(locale, "moderation", "nsfwServerAlertContent", safeEmbedText(message.author.tag, 128)),
     embeds: [new EmbedBuilder().setColor(0xed4245).setTitle(t(locale, "moderation", "nsfwServerAlertTitle"))
       .addFields(
         { name: t(locale, "moderation", "user"), value: `${message.author} (\`${message.author.id}\`)` },
         { name: t(locale, "moderation", "channel"), value: `${message.channel} (\`${message.channelId}\`)` },
-        { name: t(locale, "moderation", "serverName"), value: truncateText(nsfwInvite.guildName || t(locale, "moderation", "unknown")) },
-        { name: t(locale, "moderation", "matchedKeyword"), value: `\`${nsfwInvite.keyword}\``, inline: true },
+        { name: t(locale, "moderation", "serverName"), value: safeEmbedText(nsfwInvite.guildName || t(locale, "moderation", "unknown")) || t(locale, "moderation", "unknown") },
+        { name: t(locale, "moderation", "matchedKeyword"), value: safeEmbedText(nsfwInvite.keyword, 256), inline: true },
         { name: t(locale, "moderation", "serverId"), value: `\`${nsfwInvite.guildId}\``, inline: true },
         { name: t(locale, "moderation", "inviteCode"), value: `\`${nsfwInvite.code}\``, inline: true },
         { name: t(locale, "moderation", "timeout", Math.round(timeoutMs / 60_000)), value: resultLabel(timeoutResult, locale), inline: true },

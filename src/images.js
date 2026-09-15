@@ -35,6 +35,14 @@ export function isImageAttachment(attachment) {
   return IMAGE_EXTENSIONS.test(attachment.name ?? "");
 }
 
+export function getTrustedImageUrls(urls, maxUrls = 10) {
+  if (!Array.isArray(urls) || maxUrls <= 0) {
+    return [];
+  }
+
+  return [...new Set(urls.filter((url) => isTrustedImageUrl(url)))].slice(0, maxUrls);
+}
+
 export function getMessageImageSources(message) {
   const sources = [];
   const seenUrls = new Set();

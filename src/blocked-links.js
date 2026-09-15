@@ -17,6 +17,28 @@ function normalizeDomain(domain) {
     : "";
 }
 
+function createOcrLabelPattern(label) {
+  // OCR may insert spaces between connected or cursive characters.
+  return [...label].map(escapeRegex).join("\\s*");
+}
+
+function createOcrDomainPattern(domain) {
+  const labels = domain.split(".");
+  const domainPattern = labels
+    .map((label, index) => {
+      const separator = index === labels.length - 2
+        ? "(?:\\s*\\.\\s*|\\s+)"
+        : "\\s*\\.\\s*";
+      return `${createOcrLabelPattern(label)}${index < labels.length - 1 ? separator : ""}`;
+    })
+    .join("");
+
+  return new RegExp(
+    `(?<![a-z0-9.-])(?:https?:\\/\\/)?(?:[a-z0-9-]+\\s*\\.\\s*)*${domainPattern}(?=$|[^a-z0-9.-]|\\.(?![a-z0-9-]))`,
+    "iu",
+  );
+}
+
 const configuredDomains = Array.isArray(blockedDomains)
   ? blockedDomains
   : blockedDomains.domains;
@@ -32,10 +54,7 @@ const BLOCKED_DOMAIN_PATTERNS = BLOCKED_DOMAINS.map((domain) => new RegExp(
 
 const BLOCKED_DOMAIN_OCR_PATTERNS = BLOCKED_DOMAINS.map((domain) => ({
   domain,
-  pattern: new RegExp(
-    `(?<![a-z0-9.-])(?:https?:\\/\\/)?(?:[a-z0-9-]+\\s*\\.\\s*)*${escapeRegex(domain)}(?=$|[^a-z0-9.-]|\\.(?![a-z0-9-]))`,
-    "iu",
-  ),
+  pattern: createOcrDomainPattern(domain),
 }));
 
 const BLOCKED_LINK_PATTERNS = Object.freeze([
@@ -66,7 +85,7 @@ export function findBlockedDomain(text) {
     return null;
   }
 
-  const searchableText = text.replace(/\s*\.\s*/gu, ".");
+  const searchableText = text.normalize("NFKC");
 
   for (const { domain, pattern } of BLOCKED_DOMAIN_OCR_PATTERNS) {
     if (pattern.test(searchableText)) {

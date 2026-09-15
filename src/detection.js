@@ -176,6 +176,10 @@ export function findSuspiciousText(text, settings = DEFAULT_TEXT_SCAM_SETTINGS, 
 }
 
 export function truncateText(text, maxLength = 900) {
+  if (typeof text !== "string") {
+    return "";
+  }
+
   const compactText = text.replace(/\s+/gu, " ").trim();
 
   if (compactText.length <= maxLength) {

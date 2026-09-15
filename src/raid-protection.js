@@ -10,6 +10,10 @@ const RAID_WINDOWS_MS = Object.freeze({
   [RAID_LEVELS.MEDIUM]: 60_000,
   [RAID_LEVELS.LOW]: 60_000,
 });
+const MAX_RAID_WINDOW_MS = Math.max(...Object.values(RAID_WINDOWS_MS));
+const MAX_TRACKED_KEYS = 5_000;
+const MAX_ENTRIES_PER_KEY = 512;
+const RAID_PRUNE_INTERVAL_MS = 30_000;
 
 export function normalizeRaidLevel(level) {
   return Object.values(RAID_LEVELS).includes(level) ? level : DEFAULT_RAID_LEVEL;
@@ -52,13 +56,47 @@ export function getRaidFingerprint(message, imageSources = []) {
 
 export class RaidTracker {
   #entries = new Map();
+  #lastPrunedAt = 0;
+
+  #prune(now) {
+    if (
+      now - this.#lastPrunedAt < RAID_PRUNE_INTERVAL_MS &&
+      this.#entries.size <= MAX_TRACKED_KEYS
+    ) {
+      return;
+    }
+
+    this.#lastPrunedAt = now;
+
+    for (const [key, entries] of this.#entries) {
+      const activeEntries = entries.filter(
+        (entry) => now - entry.timestamp <= MAX_RAID_WINDOW_MS,
+      );
+
+      if (activeEntries.length === 0) {
+        this.#entries.delete(key);
+      } else {
+        this.#entries.set(key, activeEntries);
+      }
+    }
+
+    while (this.#entries.size > MAX_TRACKED_KEYS) {
+      const oldestKey = this.#entries.keys().next().value;
+      if (oldestKey === undefined) break;
+      this.#entries.delete(oldestKey);
+    }
+  }
 
   record({ guildId, userId, channelId, content, fingerprint, message, level, requiredChannels, now = Date.now() }) {
+    this.#prune(now);
     const normalized = normalizeRaidMessage(fingerprint ?? content);
     if (!normalized) return null;
     const key = `${guildId}:${userId}:${normalized}`;
     const entries = (this.#entries.get(key) ?? []).filter((entry) => now - entry.timestamp <= windowMs(level));
-    if (!entries.some((entry) => entry.channelId === channelId)) {
+    if (
+      !entries.some((entry) => entry.channelId === channelId) &&
+      entries.length < MAX_ENTRIES_PER_KEY
+    ) {
       entries.push({ channelId, message, timestamp: now });
     }
     this.#entries.set(key, entries);

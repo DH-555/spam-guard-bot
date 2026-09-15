@@ -1,26 +1,47 @@
 import { randomUUID } from "node:crypto";
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle } from "discord.js";
 import { resolveLocale, t } from "./i18n.js";
+import { getTrustedImageUrls } from "./images.js";
+import { escapeDiscordMarkdown, sanitizeLogText, sanitizeText } from "./security.js";
 
 export const FEEDBACK_CHANNEL_ID = "1523128007919796224";
 export const FEEDBACK_GUILD_ID = "1093301485347020941";
 const feedbacks = new Map();
+const FEEDBACK_TTL_MS = 15 * 60_000;
+const MAX_FEEDBACKS = 1_000;
+
+function pruneFeedbacks(now = Date.now()) {
+  for (const [id, feedback] of feedbacks) {
+    if (feedback.expiresAt <= now) {
+      feedbacks.delete(id);
+    }
+  }
+
+  while (feedbacks.size > MAX_FEEDBACKS) {
+    const oldestId = feedbacks.keys().next().value;
+    if (oldestId === undefined) break;
+    feedbacks.delete(oldestId);
+  }
+}
 
 export function createDetectionFeedback(match, message, locale = resolveLocale(message.guild)) {
   const id = randomUUID();
+  pruneFeedbacks();
   feedbacks.set(id, {
     messageId: message.id,
     guildId: message.guildId,
     channelId: message.channelId,
-    authorTag: message.author.tag,
-    content: message.content || "(empty)",
-    recognizedText: match.text || "(empty)",
-    imageUrls: [...new Set([
+    authorTag: sanitizeLogText(message.author?.tag, 128),
+    content: sanitizeText(message.content || "(empty)", 2_000),
+    recognizedText: sanitizeText(match.text || "(empty)", 4_000),
+    imageUrls: getTrustedImageUrls([
       match.source?.url,
-      ...[...message.attachments.values()].map((attachment) => attachment.url),
-      ...message.embeds.flatMap((embed) => [embed.image?.url, embed.thumbnail?.url].filter(Boolean)),
-    ].filter(Boolean))],
+      ...[...(message.attachments?.values?.() ?? [])].map((attachment) => attachment.url),
+      ...(message.embeds ?? []).flatMap((embed) => [embed.image?.url, embed.thumbnail?.url]),
+    ]),
+    expiresAt: Date.now() + FEEDBACK_TTL_MS,
   });
+  pruneFeedbacks();
 
   return {
     id,
@@ -32,8 +53,11 @@ export function createDetectionFeedback(match, message, locale = resolveLocale(m
 }
 
 export async function handleDetectionFeedback(interaction) {
-  if (!interaction.isButton() || !interaction.customId.startsWith("detection-feedback:")) return false;
-  const [, value, id] = interaction.customId.split(":");
+  if (!interaction.isButton()) return false;
+  const match = /^detection-feedback:(true|false):([0-9a-f-]{36})$/u.exec(interaction.customId);
+  if (!match) return false;
+  const [, value, id] = match;
+  pruneFeedbacks();
   const feedback = feedbacks.get(id);
   const locale = resolveLocale(interaction);
   if (!feedback) {
@@ -58,13 +82,14 @@ export async function handleDetectionFeedback(interaction) {
       title: t(locale, "moderation", "feedbackTitle"),
       fields: [
         { name: t(locale, "moderation", "originalServerChannel"), value: `${feedback.guildId} / ${feedback.channelId}` },
-        { name: "Usuario", value: `${feedback.authorTag} (${feedback.messageId})` },
-        { name: t(locale, "moderation", "recognizedText"), value: feedback.recognizedText.slice(0, 1024) },
-        { name: "Mensaje", value: feedback.content.slice(0, 1024) },
-        { name: t(locale, "moderation", "reportedBy"), value: `${interaction.user.tag} (${interaction.user.id})` },
+        { name: "Usuario", value: escapeDiscordMarkdown(feedback.authorTag, 128) + " (" + feedback.messageId + ")" },
+        { name: t(locale, "moderation", "recognizedText"), value: escapeDiscordMarkdown(feedback.recognizedText, 1024) || "(empty)" },
+        { name: "Mensaje", value: escapeDiscordMarkdown(feedback.content, 1024) || "(empty)" },
+        { name: t(locale, "moderation", "reportedBy"), value: escapeDiscordMarkdown(interaction.user.tag, 128) + " (" + interaction.user.id + ")" },
       ],
     }],
     files: feedback.imageUrls.map((url) => ({ attachment: url })),
+    allowedMentions: { parse: [] },
   });
   feedbacks.delete(id);
   await interaction.update({ components: [] });

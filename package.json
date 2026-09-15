@@ -21,11 +21,11 @@
     "dotenv": "^17.4.2",
     "onnxruntime-node": "^1.30.0",
     "ppu-paddle-ocr": "^6.6.0",
-    "sharp": "^0.34.3"
+    "sharp": "^0.35.4"
   },
   "pnpm": {
     "overrides": {
-      "undici": "6.27.0"
+      "undici": ">=6.28.0"
     }
   }
 }

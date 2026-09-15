@@ -1,8 +1,11 @@
 const DISCORD_INVITE_PATTERN =
-  /(?<![a-z0-9_-])(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord(?:app)?\.com\/invite)\/([a-z0-9_-]+)/giu;
+  /(?<![a-z0-9_-])(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord(?:app)?\.com\/invite)\/([a-z0-9_-]{1,64})(?![a-z0-9_-])/giu;
 
 const DEFAULT_INVITE_CACHE_TTL_MS = 10 * 60_000;
 const DEFAULT_FAILED_INVITE_CACHE_TTL_MS = 60_000;
+const MAX_INVITE_CODE_LENGTH = 64;
+const MAX_INVITES_PER_TEXT = 16;
+const MAX_INVITE_CACHE_ENTRIES = 2_048;
 
 function decodeUrlEncoding(value) {
   let decoded = value;
@@ -57,6 +60,10 @@ export function extractDiscordInviteCodes(content) {
       if (code) {
         codes.add(code);
       }
+
+      if (codes.size >= MAX_INVITES_PER_TEXT) {
+        return [...codes];
+      }
     }
   }
 
@@ -89,79 +96,121 @@ export function createInviteResolver(
   } = {},
 ) {
   const cache = new Map();
+  const pending = new Map();
+
+  function setCache(key, invite, expiresAt) {
+    const now = Date.now();
+    for (const [cachedKey, cachedValue] of cache) {
+      if (cachedValue.expiresAt <= now) {
+        cache.delete(cachedKey);
+      }
+    }
+
+    cache.delete(key);
+    cache.set(key, { invite, expiresAt });
+
+    while (cache.size > MAX_INVITE_CACHE_ENTRIES) {
+      const oldestKey = cache.keys().next().value;
+      if (oldestKey === undefined) break;
+      cache.delete(oldestKey);
+    }
+  }
 
   return async function resolveInvite(code) {
+    if (
+      typeof code !== "string" ||
+      !new RegExp(`^[a-z0-9_-]{1,${MAX_INVITE_CODE_LENGTH}}$`, "iu").test(code.trim())
+    ) {
+      return null;
+    }
+
+    const normalizedCode = code.trim();
+    const cacheKey = normalizedCode.toLowerCase();
     const now = Date.now();
-    const cached = cache.get(code);
+    const cached = cache.get(cacheKey);
 
     if (cached && cached.expiresAt > now) {
+      cache.delete(cacheKey);
+      cache.set(cacheKey, cached);
       return cached.invite;
+    }
+
+    if (cached) {
+      cache.delete(cacheKey);
+    }
+
+    const pendingRequest = pending.get(cacheKey);
+    if (pendingRequest) {
+      return pendingRequest;
     }
 
     // OCR commonly preserves an all-caps rendering of a link. Retry the
     // lower-case code when the first lookup fails, which avoids missing a
     // lower-case vanity invite such as DISCORD.GG/PIPER.
     const candidateCodes = [...new Set([
-      code,
-      typeof code === "string" ? code.toLowerCase() : code,
+      normalizedCode,
+      normalizedCode.toLowerCase(),
     ])];
 
-    for (const candidateCode of candidateCodes) {
-      try {
-        const invite = await client.fetchInvite(candidateCode);
-        const guildId = invite?.guild?.id ?? invite?.guildId ?? null;
+    const request = (async () => {
+      for (const candidateCode of candidateCodes) {
+        try {
+          const invite = await client.fetchInvite(candidateCode);
+          const guildId = invite?.guild?.id ?? invite?.guildId ?? null;
 
-        const guild = invite?.guild;
-        const guildDescription =
-          guild?.description ??
-          guild?.welcomeScreen?.description ??
-          invite?.guildDescription ??
-          invite?.description ??
-          null;
-        const resolvedInvite = guildId
-          ? {
-              guildId,
-              guildName: guild?.name ?? invite?.guildName ?? null,
-              ...(typeof guildDescription === "string"
-                ? { guildDescription }
-                : {}),
-              ...(Array.isArray(guild?.features)
-                ? { guildFeatures: guild.features }
-                : {}),
-              ...(typeof guild?.nsfwLevel === "number"
-                ? { guildNsfwLevel: guild.nsfwLevel }
-                : {}),
-              ...(Array.isArray(guild?.tags)
-                ? { guildTags: guild.tags }
-                : {}),
-              ...(typeof (guild?.tag ?? guild?.serverTag) === "string"
-                ? { guildTag: guild.tag ?? guild.serverTag }
-                : {}),
-              ...(typeof (guild?.tagEmoji ?? guild?.serverTagEmoji ?? guild?.unicodeEmoji) === "string"
-                ? { guildTagEmoji: guild.tagEmoji ?? guild.serverTagEmoji ?? guild.unicodeEmoji }
-                : {}),
-              ...(guild?.welcomeScreen
-                ? { guildWelcomeScreen: guild.welcomeScreen }
-                : {}),
-            }
-          : null;
+          const guild = invite?.guild;
+          const guildDescription =
+            guild?.description ??
+            guild?.welcomeScreen?.description ??
+            invite?.guildDescription ??
+            invite?.description ??
+            null;
+          const resolvedInvite = guildId
+            ? {
+                guildId,
+                guildName: guild?.name ?? invite?.guildName ?? null,
+                ...(typeof guildDescription === "string"
+                  ? { guildDescription }
+                  : {}),
+                ...(Array.isArray(guild?.features)
+                  ? { guildFeatures: guild.features }
+                  : {}),
+                ...(typeof guild?.nsfwLevel === "number"
+                  ? { guildNsfwLevel: guild.nsfwLevel }
+                  : {}),
+                ...(Array.isArray(guild?.tags)
+                  ? { guildTags: guild.tags }
+                  : {}),
+                ...(typeof (guild?.tag ?? guild?.serverTag) === "string"
+                  ? { guildTag: guild.tag ?? guild.serverTag }
+                  : {}),
+                ...(typeof (guild?.tagEmoji ?? guild?.serverTagEmoji ?? guild?.unicodeEmoji) === "string"
+                  ? { guildTagEmoji: guild.tagEmoji ?? guild.serverTagEmoji ?? guild.unicodeEmoji }
+                  : {}),
+                ...(guild?.welcomeScreen
+                  ? { guildWelcomeScreen: guild.welcomeScreen }
+                  : {}),
+              }
+            : null;
 
-        cache.set(code, {
-          invite: resolvedInvite,
-          expiresAt: now + cacheTtlMs,
-        });
+          setCache(cacheKey, resolvedInvite, now + cacheTtlMs);
 
-        return resolvedInvite;
-      } catch {
-        // Try the next spelling before marking the invite as unavailable.
+          return resolvedInvite;
+        } catch {
+          // Try the next spelling before marking the invite as unavailable.
+        }
       }
-    }
 
-    cache.set(code, {
-      invite: null,
-      expiresAt: now + failedCacheTtlMs,
-    });
-    return null;
+      setCache(cacheKey, null, now + failedCacheTtlMs);
+      return null;
+    })();
+
+    pending.set(cacheKey, request);
+    try {
+      return await request;
+    } finally {
+      pending.delete(cacheKey);
+    }
   };
 }
 
