@@ -8,6 +8,9 @@ services:
     init: true
     env_file:
       - .env
+    # The named volume replaces the cache directory created in the image.
+    # Recreate it on every start so existing/empty volumes work as well.
+    command: ["sh", "-c", "mkdir -p /home/node/.cache/ppu-paddle-ocr && exec node src/index.js"]
     volumes:
       - bot-data:/app/data
       - ocr-cache:/home/node/.cache/ppu-paddle-ocr
