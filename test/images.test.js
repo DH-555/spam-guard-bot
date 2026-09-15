@@ -68,6 +68,32 @@ test("extracts images and thumbnails from link embeds", () => {
   ]);
 });
 
+test("recognizes forwarded image attachments with only dimensions", () => {
+  const forwardedMessage = {
+    attachments: new Map([
+      ["forwarded-photo", {
+        id: "forwarded-photo",
+        name: "photo",
+        contentType: null,
+        size: 100,
+        width: 1200,
+        height: 800,
+        url: "https://cdn.discordapp.com/attachments/forwarded/photo",
+      }],
+    ]),
+    embeds: [],
+    messageSnapshots: new Map(),
+  };
+
+  const message = {
+    attachments: new Map(),
+    embeds: [],
+    messageSnapshots: new Map([["snapshot", forwardedMessage]]),
+  };
+
+  assert.equal(getMessageImageSources(message)[0].forwarded, true);
+});
+
 test("keeps trusted alternate URLs for proxied images", () => {
   const message = {
     attachments: new Map(),

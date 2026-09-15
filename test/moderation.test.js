@@ -373,8 +373,12 @@ test("times out before deleting spam and removes its single-message thread", asy
 });
 
 test("detects a malicious forwarded image and moderates the outer message", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
   let deleted = 0;
   let timeoutCalls = 0;
+  let ocrCalls = 0;
   const user = {
     id: "forwarding-user",
     tag: "forwarding-user#0001",
@@ -420,25 +424,35 @@ test("detects a malicious forwarded image and moderates the outer message", asyn
     inGuild: () => true,
   };
 
-  const handleMessage = createMessageHandler({
-    client: {},
-    config: { timeoutMs: 60_000 },
-    ocrService: { recognize: async () => "" },
-    settingsStore: {
-      getModerationChannelId: () => null,
-      getParanoiaLevel: () => "high",
-      getExcludedRoleIds: () => [],
-      getExcludedAdministrators: () => true,
-      getTimeoutMs: () => null,
-      getRaidProtection: () => ({ enabled: false }),
-      getSpamProtection: () => ({ enabled: false }),
-    },
-  });
+  try {
+    const handleMessage = createMessageHandler({
+      client: {},
+      config: { timeoutMs: 60_000 },
+      ocrService: {
+        recognize: async () => {
+          ocrCalls += 1;
+          return "";
+        },
+      },
+      settingsStore: {
+        getModerationChannelId: () => null,
+        getParanoiaLevel: () => "high",
+        getExcludedRoleIds: () => [],
+        getExcludedAdministrators: () => true,
+        getTimeoutMs: () => null,
+        getRaidProtection: () => ({ enabled: false }),
+        getSpamProtection: () => ({ enabled: false }),
+      },
+    });
 
-  await handleMessage(message);
+    await handleMessage(message);
 
-  assert.equal(deleted, 1);
-  assert.equal(timeoutCalls, 1);
+    assert.equal(ocrCalls, 2);
+    assert.equal(deleted, 1);
+    assert.equal(timeoutCalls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("detects a malicious image sent in a recently created author-owned thread and deletes the thread", async () => {

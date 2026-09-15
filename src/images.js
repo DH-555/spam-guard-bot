@@ -32,7 +32,14 @@ export function isImageAttachment(attachment) {
     return true;
   }
 
-  return IMAGE_EXTENSIONS.test(attachment.name ?? "");
+  if (IMAGE_EXTENSIONS.test(attachment.name ?? "")) {
+    return true;
+  }
+
+  // Discord marks images (including some forwarded snapshot attachments) with
+  // dimensions even when the optional MIME type and filename extension are
+  // unavailable.
+  return attachment.width > 0 && attachment.height > 0;
 }
 
 export function getTrustedImageUrls(urls, maxUrls = 10) {

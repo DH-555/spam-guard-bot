@@ -110,7 +110,7 @@ client.on(Events.GuildCreate, (guild) => {
 });
 
 client.on(Events.MessageCreate, (message) => {
-  void handleSpamReportMessage(message).catch((error) => console.error("[Spam report] Failed:", error));
+  void handleSpamReportMessage(message, config).catch((error) => console.error("[Spam report] Failed:", error));
   void handleMessage(message).catch((error) => {
     console.error(
       `[Moderation] Failed to process message ${message.id}:`,
@@ -130,7 +130,7 @@ client.on(Events.MessageUpdate, (_oldMessage, newMessage) => {
 
 client.on(Events.InteractionCreate, (interaction) => {
   if (interaction.isButton() && interaction.customId.startsWith("detection-feedback:")) {
-    void handleDetectionFeedback(interaction).catch((error) => {
+    void handleDetectionFeedback(interaction, config).catch((error) => {
       console.error("[Detection feedback] Failed to process feedback:", error);
       if (!interaction.replied && !interaction.deferred) {
         void interaction.reply({ content: "No se pudo enviar el feedback.", ephemeral: true });

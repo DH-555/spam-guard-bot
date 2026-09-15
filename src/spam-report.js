@@ -4,19 +4,19 @@ import { getTrustedImageUrls } from "./images.js";
 import { resolveLocale, t } from "./i18n.js";
 import { escapeDiscordMarkdown, sanitizeLogText } from "./security.js";
 
-export async function handleSpamReport(interaction) {
+export async function handleSpamReport(interaction, { sendFeedback = true } = {}) {
   if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== "spamreport") return false;
   if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
     await interaction.reply({ content: "Necesitas permiso para gestionar mensajes.", ephemeral: true, allowedMentions: { parse: [] } });
     return true;
   }
   const targetMessage = interaction.targetMessage;
-  const result = await reportSpamMessage(interaction.client, interaction.guild, targetMessage, interaction.user.tag, interaction.user.id);
+  const result = await reportSpamMessage(interaction.client, interaction.guild, targetMessage, interaction.user.tag, interaction.user.id, sendFeedback);
   await interaction.reply({ content: formatReportResult(result), ephemeral: true, allowedMentions: { parse: [] } });
   return true;
 }
 
-export async function handleSpamReportMessage(message) {
+export async function handleSpamReportMessage(message, { sendFeedback = true } = {}) {
   if (message.author.bot || !message.inGuild() || message.content.trim().toLowerCase() !== "!spamreport") return false;
 
   try {
@@ -58,6 +58,7 @@ export async function handleSpamReportMessage(message) {
       targetMessage,
       message.author.tag,
       message.author.id,
+      sendFeedback,
     );
     await message.reply({
       content: formatReportResult(result),
@@ -91,7 +92,7 @@ function formatReportResult(result) {
   return `${timeoutStatus} Mensajes iguales eliminados: ${result.deleted}.`;
 }
 
-async function reportSpamMessage(client, guild, targetMessage, reporterTag, reporterId) {
+async function reportSpamMessage(client, guild, targetMessage, reporterTag, reporterId, sendFeedback = true) {
   const locale = resolveLocale(guild);
   const user = targetMessage.author;
   const content = targetMessage.content;
@@ -144,28 +145,30 @@ async function reportSpamMessage(client, guild, targetMessage, reporterTag, repo
     }
   }
 
-  try {
-    const reportChannel = await client.channels.fetch(FEEDBACK_CHANNEL_ID);
-    if (reportChannel?.isTextBased() && reportChannel.isSendable() && reportChannel.guildId === FEEDBACK_GUILD_ID) {
-      await reportChannel.send({
-        content: t(locale, "moderation", "manualSpamReport"),
-        embeds: [{ color: 0xed4245, title: t(locale, "moderation", "feedbackTitle"), fields: [
-          { name: "Usuario", value: escapeDiscordMarkdown(user.tag, 128) + " (" + user.id + ")" },
-          { name: t(locale, "moderation", "originalServerChannel"), value: `${guild.id} / ${targetMessage.channelId}` },
-          { name: "Mensaje", value: escapeDiscordMarkdown(content, 1024) || "(empty)" },
-          { name: t(locale, "moderation", "reportedBy"), value: escapeDiscordMarkdown(reporterTag, 128) + " (" + reporterId + ")" },
-        ] }],
-        files: [
-          ...getTrustedImageUrls([
-            ...[...(targetMessage.attachments?.values?.() ?? [])].map((attachment) => attachment.url),
-            ...(targetMessage.embeds ?? []).flatMap((embed) => [embed.image?.url, embed.thumbnail?.url]),
-          ]).map((url) => ({ attachment: url })),
-        ],
-        allowedMentions: { parse: [] },
-      });
+  if (sendFeedback) {
+    try {
+      const reportChannel = await client.channels.fetch(FEEDBACK_CHANNEL_ID);
+      if (reportChannel?.isTextBased() && reportChannel.isSendable() && reportChannel.guildId === FEEDBACK_GUILD_ID) {
+        await reportChannel.send({
+          content: t(locale, "moderation", "manualSpamReport"),
+          embeds: [{ color: 0xed4245, title: t(locale, "moderation", "feedbackTitle"), fields: [
+            { name: "Usuario", value: escapeDiscordMarkdown(user.tag, 128) + " (" + user.id + ")" },
+            { name: t(locale, "moderation", "originalServerChannel"), value: `${guild.id} / ${targetMessage.channelId}` },
+            { name: "Mensaje", value: escapeDiscordMarkdown(content, 1024) || "(empty)" },
+            { name: t(locale, "moderation", "reportedBy"), value: escapeDiscordMarkdown(reporterTag, 128) + " (" + reporterId + ")" },
+          ] }],
+          files: [
+            ...getTrustedImageUrls([
+              ...[...(targetMessage.attachments?.values?.() ?? [])].map((attachment) => attachment.url),
+              ...(targetMessage.embeds ?? []).flatMap((embed) => [embed.image?.url, embed.thumbnail?.url]),
+            ]).map((url) => ({ attachment: url })),
+          ],
+          allowedMentions: { parse: [] },
+        });
+      }
+    } catch (error) {
+      console.warn("[Spam report] Could not send the central feedback report:", error);
     }
-  } catch (error) {
-    console.warn("[Spam report] Could not send the central feedback report:", error);
   }
 
   return { deleted, timedOut };

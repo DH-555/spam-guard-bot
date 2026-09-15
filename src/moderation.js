@@ -64,7 +64,7 @@ async function findMatchingImage(
       .map((url) => findKnownScamImageChannel(url))
       .find(Boolean);
 
-    if (knownScamImageChannel) {
+    if (knownScamImageChannel && !source.forwarded) {
       console.log(
         `[Image analysis] ${sanitizeLogText(source.label)}: known scam-image source channel ` +
           `${knownScamImageChannel.channelId} (${knownScamImageChannel.name}).`,
@@ -115,7 +115,7 @@ async function findMatchingImage(
         }
       }
 
-      if (visualMatch) {
+      if (visualMatch && !source.forwarded) {
         console.log(
           `[Image analysis] ${sanitizeLogText(source.label)}: visual match "${sanitizeLogText(visualMatch.reference.label)}" ` +
             `(distance ${visualMatch.distance}; download ${downloadMs.toFixed(0)} ms; ` +
@@ -128,10 +128,13 @@ async function findMatchingImage(
         };
       }
 
+      let ocrText = "";
+      let ocrAttempted = false;
       const recognizeOcr = ocrService.recognize?.bind(ocrService) ??
         ocrService.recognizeWithFallback?.bind(ocrService);
 
       if (recognizeOcr) {
+        ocrAttempted = true;
         const recognizePass = (effort) => recognizeOcr(image, {
           effort,
           shouldStop: (recognizedText) =>
@@ -139,7 +142,7 @@ async function findMatchingImage(
         });
         const lowStartedAt = performance.now();
         const lowText = await recognizePass(OCR_EFFORTS.LOW);
-        let ocrText = lowText;
+        ocrText = lowText;
         let maliciousInvite = shouldCheckMaliciousInvites
           ? await findMaliciousInvite(lowText, maliciousGuildIds, resolveInvite)
           : null;
@@ -205,8 +208,52 @@ async function findMatchingImage(
           }
         }
       }
+
+      // Forwarded photos must go through OCR even when their source channel or
+      // pixels are already known. Those signals remain the fallback result if
+      // OCR does not find a match.
+      if (source.forwarded) {
+        if (knownScamImageChannel) {
+          console.log(
+            `[Image analysis] ${sanitizeLogText(source.label)}: known scam-image source channel ` +
+              `${knownScamImageChannel.channelId} (${knownScamImageChannel.name}).`,
+          );
+          return {
+            source,
+            kind: "knownScamImageChannel",
+            knownScamImageChannel,
+            ocrAttempted,
+            text: ocrText,
+          };
+        }
+
+        if (visualMatch) {
+          console.log(
+            `[Image analysis] ${sanitizeLogText(source.label)}: visual match "${sanitizeLogText(visualMatch.reference.label)}" ` +
+              `(distance ${visualMatch.distance}; download ${downloadMs.toFixed(0)} ms; ` +
+              `hash ${visualMs.toFixed(0)} ms; OCR attempted; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
+          );
+          return {
+            source,
+            kind: "visual",
+            visualMatch,
+            ocrAttempted,
+          };
+        }
+      }
     } catch (error) {
       console.error(`[Image analysis] Could not analyze ${sanitizeLogText(source.label)}:`, error);
+
+      // Keep the URL-based protection available if a forwarded image cannot be
+      // downloaded or decoded for OCR.
+      if (source.forwarded && knownScamImageChannel) {
+        return {
+          source,
+          kind: "knownScamImageChannel",
+          knownScamImageChannel,
+          ocrAttempted: false,
+        };
+      }
     }
   }
 
@@ -222,6 +269,7 @@ async function sendModerationAlert(
   deleteResult,
   timeoutResult,
   locale,
+  sendFeedback = true,
 ) {
   const channel = await client.channels.fetch(moderationChannelId);
 
@@ -291,7 +339,8 @@ async function sendModerationAlert(
       {
         name: t(locale, "moderation", "recognizedText"),
         value:
-          match.kind === "visual" || match.kind === "knownScamImageChannel"
+          match.kind === "visual" ||
+          (match.kind === "knownScamImageChannel" && !match.ocrAttempted)
             ? t(
                 locale,
                 "moderation",
@@ -303,7 +352,9 @@ async function sendModerationAlert(
     .setThumbnail(message.author.displayAvatarURL())
     .setTimestamp();
 
-  const feedback = match.kind === "ocr" ? createDetectionFeedback(match, message) : null;
+  const feedback = sendFeedback && match.kind === "ocr"
+    ? createDetectionFeedback(match, message)
+    : null;
 
   await channel.send({
     content: t(locale, "moderation", "alertContent", safeEmbedText(message.author.tag, 128)),
@@ -353,7 +404,7 @@ async function sendEasterEggReply(message, locale) {
   });
 }
 
-async function sendSpamAlert(client, message, spamMessage, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale, feedbackMatch = null) {
+async function sendSpamAlert(client, message, spamMessage, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale, feedbackMatch = null, sendFeedback = true) {
   if (!moderationChannelId) {
     await sendFallbackNotice(message, locale);
     return;
@@ -364,7 +415,9 @@ async function sendSpamAlert(client, message, spamMessage, timeoutResult, delete
     throw new Error("The configured moderation channel is unavailable or cannot receive messages.");
   }
 
-  const feedback = feedbackMatch ? createDetectionFeedback(feedbackMatch, message) : null;
+  const feedback = sendFeedback && feedbackMatch
+    ? createDetectionFeedback(feedbackMatch, message)
+    : null;
   await channel.send({
     content: t(locale, "moderation", "spamAlertContent", safeEmbedText(message.author.tag, 128)),
     embeds: [new EmbedBuilder().setColor(0xed4245).setTitle(t(locale, "moderation", "spamAlertTitle"))
@@ -742,7 +795,7 @@ export function createMessageHandler({
         message, member, timeoutMs, "Suspicious scam advertisement detected.", locale,
       );
       try {
-        await sendSpamAlert(client, message, suspiciousText, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale, { text: getSpamText(message) });
+        await sendSpamAlert(client, message, suspiciousText, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale, { text: getSpamText(message) }, config.sendFeedback !== false);
       } catch (error) {
         console.error("[Text scam protection] Could not send the notification:", error);
       }
@@ -918,6 +971,7 @@ export function createMessageHandler({
           deleteResult,
           timeoutResult,
           locale,
+          config.sendFeedback !== false,
         );
       } else {
         await sendFallbackNotice(message, locale);

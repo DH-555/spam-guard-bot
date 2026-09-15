@@ -81,6 +81,61 @@ test("!spamreport deletes the reported message and its single-message thread", a
   assert.match(replies[0].content, /eliminados: 1/);
 });
 
+test("!spamreport skips the central feedback report when disabled", async () => {
+  let centralFetchCalls = 0;
+  let deleted = 0;
+  const user = { id: "reported-user", tag: "reported-user#0001", bot: false };
+  const targetMessage = {
+    id: "target-message",
+    author: user,
+    content: "same spam",
+    channel: {
+      isThread: () => false,
+      messages: { fetch: async () => new Map() },
+    },
+    channelId: "channel-1",
+    attachments: new Map(),
+    embeds: [],
+    delete: async () => { deleted += 1; },
+  };
+  const reporter = {
+    author: { id: "reporter", bot: false, tag: "reporter#0001" },
+    content: "!spamreport",
+    reference: { messageId: targetMessage.id },
+    member: { permissions: { has: () => true } },
+    guild: {
+      id: "guild-1",
+      members: {
+        fetch: async () => ({ timeout: async () => {} }),
+      },
+      channels: {
+        cache: {
+          filter: () => ({ values: () => [] }),
+        },
+      },
+    },
+    channel: {
+      messages: { fetch: async () => targetMessage },
+    },
+    client: {
+      channels: {
+        fetch: async () => {
+          centralFetchCalls += 1;
+          throw new Error("central feedback must not be contacted");
+        },
+      },
+    },
+    inGuild: () => true,
+    reply: async () => {},
+    delete: async () => {},
+  };
+
+  await handleSpamReportMessage(reporter, { sendFeedback: false });
+
+  assert.equal(deleted, 1);
+  assert.equal(centralFetchCalls, 0);
+});
+
 test("!spamreport deletes its command message and rejects non-moderators", async () => {
   const events = [];
   const replies = [];

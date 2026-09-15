@@ -55,8 +55,9 @@ ID observed as a repeated source of MrBeast scam images:
 | --- | --- |
 | `740463504602955806` | MrBeast scam images |
 
-An image from a listed channel is blocked immediately and the moderation alert
-identifies the source channel. This signal only works when Discord preserves
+An image from a listed channel is blocked and the moderation alert identifies
+the source channel. Forwarded images are also sent through OCR before this
+fallback signal is applied. This signal only works when Discord preserves
 the original attachment URL; a re-uploaded image receives a new channel ID and
 still relies on visual matching or OCR.
 
@@ -544,8 +545,13 @@ admins to configure `/setup moderation-channel` for full alerts and details.
 | `MAX_IMAGE_SIZE_MB` | No | `8` |
 | `MAX_IMAGE_PIXELS` | No | `16000000` |
 | `IMAGE_DOWNLOAD_TIMEOUT_MS` | No | `15000` |
+| `SEND_FEEDBACK` | No | `true` |
 | `VISUAL_REFERENCE_MANIFEST_PATH` | No | `generated/visual-reference-manifest.json` |
 | `VISUAL_MATCH_THRESHOLD` | No | `6` |
+
+Set `SEND_FEEDBACK=false` to disable sending detection feedback and manual spam
+reports to the central feedback channel. Moderation alerts in each server and
+the moderation actions themselves continue to work normally.
 
 OCR uses the PP-OCRv6 Small model through `ppu-paddle-ocr` and caches its ONNX
 models under `/home/node/.cache/ppu-paddle-ocr` in Docker. The compose files

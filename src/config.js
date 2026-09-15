@@ -60,6 +60,20 @@ function readPositiveInteger(name, fallback) {
   return value;
 }
 
+function readBoolean(name, fallback) {
+  const rawValue = process.env[name];
+
+  if (rawValue === undefined || rawValue.trim() === "") {
+    return fallback;
+  }
+
+  const normalizedValue = rawValue.trim().toLowerCase();
+  if (normalizedValue === "true") return true;
+  if (normalizedValue === "false") return false;
+
+  throw new Error(`${name} must be either true or false.`);
+}
+
 export function loadConfig() {
   const timeoutMs = readPositiveNumber("TIMEOUT_MINUTES", 1440) * 60 * 1000;
 
@@ -75,6 +89,7 @@ export function loadConfig() {
       "IMAGE_DOWNLOAD_TIMEOUT_MS",
       15_000,
     ),
+    sendFeedback: readBoolean("SEND_FEEDBACK", true),
     visualReferenceManifestPath: resolve(
       process.env.VISUAL_REFERENCE_MANIFEST_PATH?.trim() ||
         "generated/visual-reference-manifest.json",

@@ -52,14 +52,20 @@ export function createDetectionFeedback(match, message, locale = resolveLocale(m
   };
 }
 
-export async function handleDetectionFeedback(interaction) {
+export async function handleDetectionFeedback(interaction, { sendFeedback = true } = {}) {
   if (!interaction.isButton()) return false;
   const match = /^detection-feedback:(true|false):([0-9a-f-]{36})$/u.exec(interaction.customId);
   if (!match) return false;
   const [, value, id] = match;
+  const locale = resolveLocale(interaction);
+
+  if (!sendFeedback) {
+    await interaction.reply({ content: t(locale, "moderation", "feedbackDisabled"), ephemeral: true });
+    return true;
+  }
+
   pruneFeedbacks();
   const feedback = feedbacks.get(id);
-  const locale = resolveLocale(interaction);
   if (!feedback) {
     await interaction.reply({ content: t(locale, "moderation", "feedbackExpired"), ephemeral: true });
     return true;
