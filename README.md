@@ -407,7 +407,7 @@ services:
       - .env
     volumes:
       - bot-data:/app/data
-      - ocr-cache:/app/tessdata
+      - ocr-cache:/home/node/.cache/ppu-paddle-ocr
 ```
 
 ## Automatic deployment with GitHub Actions
@@ -544,14 +544,13 @@ admins to configure `/setup moderation-channel` for full alerts and details.
 | `MAX_IMAGE_SIZE_MB` | No | `8` |
 | `MAX_IMAGE_PIXELS` | No | `16000000` |
 | `IMAGE_DOWNLOAD_TIMEOUT_MS` | No | `15000` |
-| `OCR_CACHE_PATH` | No | `tessdata` |
-| `OCR_EFFORT` | No | `high` |
 | `VISUAL_REFERENCE_MANIFEST_PATH` | No | `generated/visual-reference-manifest.json` |
 | `VISUAL_MATCH_THRESHOLD` | No | `6` |
 
-`OCR_EFFORT` can be `low`, `medium`, or `high`. Higher effort tries more
-preprocessing passes and crops, which improves blurry screen photos at the cost
-of slower OCR.
+OCR uses the PP-OCRv6 Small model through `ppu-paddle-ocr` and caches its ONNX
+models under `/home/node/.cache/ppu-paddle-ocr` in Docker. The compose files
+persist that directory in the `ocr-cache` volume so models are downloaded only
+on the first run.
 
 Reference images live in the repository under `visual-references/`. The build
 step hashes them with a perceptual hash and writes the manifest to

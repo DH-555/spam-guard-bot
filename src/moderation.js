@@ -152,13 +152,15 @@ async function findMatchingImage(
           };
         }
 
-        if (containsScamPhrase(lowText, paranoiaLevel) ||
+        if (ocrService.singlePass ||
+          containsScamPhrase(lowText, paranoiaLevel) ||
           paranoiaLevel === PARANOIA_LEVELS.LOW) {
           const lowMs = performance.now() - lowStartedAt;
           console.log(
             `[Image analysis] ${source.label}: no visual match ` +
               `(download ${downloadMs.toFixed(0)} ms; hash ${visualMs.toFixed(0)} ms; ` +
-              `OCR low ${lowMs.toFixed(0)} ms; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
+              `OCR ${ocrService.singlePass ? "single-pass" : "low"} ${lowMs.toFixed(0)} ms; ` +
+              `total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
           );
 
           if (containsScamPhrase(lowText, paranoiaLevel)) {

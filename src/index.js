@@ -25,9 +25,7 @@ import { handleDetectionFeedback } from "./detection-feedback.js";
 import { handleSpamReportMessage } from "./spam-report.js";
 
 const config = loadConfig();
-const ocrService = new OcrService(config.ocrCachePath, {
-  effort: config.ocrEffort,
-});
+const ocrService = new OcrService();
 const settingsStore = new SettingsStore(resolve("data/settings.json"));
 await settingsStore.load();
 

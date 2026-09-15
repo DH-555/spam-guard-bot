@@ -1,4 +1,4 @@
-FROM node:22-alpine AS dependencies
+FROM node:22-bookworm-slim AS dependencies
 
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
@@ -19,11 +19,9 @@ COPY ["easter-egg photos", "./easter-egg photos"]
 RUN pnpm build:visual-references
 RUN pnpm build:easter-egg-photos
 
-FROM node:22-alpine AS runtime
+FROM node:22-bookworm-slim AS runtime
 
 ENV NODE_ENV="production"
-ENV OCR_CACHE_PATH="/app/tessdata"
-
 WORKDIR /app
 
 COPY --from=dependencies /app/node_modules ./node_modules
@@ -37,8 +35,9 @@ COPY nsfw-server-keywords.json ./nsfw-server-keywords.json
 COPY scam-image-channels.json ./scam-image-channels.json
 COPY src ./src
 
-RUN mkdir -p /app/data /app/tessdata \
-  && chown -R node:node /app
+RUN mkdir -p /app/data /home/node/.cache/ppu-paddle-ocr \
+  && chown -R node:node /app \
+  && chown -R node:node /home/node/.cache
 
 USER node
 

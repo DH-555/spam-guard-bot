@@ -1,6 +1,4 @@
-import { mkdir } from "node:fs/promises";
-import sharp from "sharp";
-import { createWorker } from "tesseract.js";
+import { PaddleOcrService, V6_SMALL_MODEL } from "ppu-paddle-ocr";
 
 export const OCR_EFFORTS = Object.freeze({
   LOW: "low",
@@ -8,20 +6,9 @@ export const OCR_EFFORTS = Object.freeze({
   HIGH: "high",
 });
 
+// Kept for configuration compatibility. PP-OCRv6 Small performs one complete
+// detection + recognition pass, so it does not need Tesseract-style variants.
 export const DEFAULT_OCR_EFFORT = OCR_EFFORTS.HIGH;
-
-const OCR_VARIANT_COUNTS = Object.freeze({
-  [OCR_EFFORTS.LOW]: 1,
-  [OCR_EFFORTS.MEDIUM]: 2,
-  [OCR_EFFORTS.HIGH]: 6,
-});
-
-const HIGH_EFFORT_CROP_REGIONS = Object.freeze([
-  { left: 0, top: 0.28, width: 0.74, height: 0.48 },
-  { left: 0.45, top: 0.42, width: 0.55, height: 0.56 },
-  { left: 0.55, top: 0.18, width: 0.45, height: 0.58 },
-  { left: 0, top: 0.15, width: 0.78, height: 0.7 },
-]);
 
 export function normalizeOcrEffort(effort) {
   if (typeof effort !== "string") {
@@ -45,87 +32,41 @@ export function normalizeOcrEffort(effort) {
   return DEFAULT_OCR_EFFORT;
 }
 
-function scaleCropRegion(region, width, height) {
-  const left = Math.max(0, Math.floor(region.left * width));
-  const top = Math.max(0, Math.floor(region.top * height));
-  const cropWidth = Math.max(1, Math.min(width - left, Math.ceil(region.width * width)));
-  const cropHeight = Math.max(1, Math.min(height - top, Math.ceil(region.height * height)));
-
-  return {
-    left,
-    top,
-    width: cropWidth,
-    height: cropHeight,
-  };
-}
-
-async function buildOcrVariants(image, effort) {
-  const metadata = await sharp(image, { animated: false }).metadata();
-  const width = metadata.width ?? 1;
-  const height = metadata.height ?? 1;
-  const variants = [
-    {},
-    { negate: true },
-    ...HIGH_EFFORT_CROP_REGIONS.map((region) => ({
-      crop: scaleCropRegion(region, width, height),
-    })),
-  ];
-
-  return variants.slice(0, OCR_VARIANT_COUNTS[effort]);
-}
-
-async function prepareImageForOcr(image, variant) {
-  let pipeline = sharp(image, { animated: false })
-    .autoOrient()
-    .grayscale();
-
-  if (variant.crop) {
-    pipeline = pipeline.extract(variant.crop);
+function toArrayBuffer(image) {
+  if (image instanceof ArrayBuffer) {
+    return image;
   }
 
-  if (variant.negate) {
-    pipeline = pipeline.negate();
+  if (ArrayBuffer.isView(image)) {
+    return image.buffer.slice(
+      image.byteOffset,
+      image.byteOffset + image.byteLength,
+    );
   }
 
-  return pipeline
-    .normalize()
-    .sharpen()
-    .resize({ width: 1800, withoutEnlargement: false })
-    .png()
-    .toBuffer();
+  throw new TypeError("OCR input must be an ArrayBuffer or a typed array.");
 }
 
 export class OcrService {
-  #cachePath;
-  #effort;
-  #workerPromise;
+  // Moderation uses this to avoid running the same PP-OCR model twice when
+  // the first pass is negative.
+  singlePass = true;
+
+  #servicePromise;
   #queue = Promise.resolve();
 
-  constructor(cachePath, options = {}) {
-    this.#cachePath = cachePath;
-    this.#effort = normalizeOcrEffort(options.effort);
-  }
+  constructor() {}
 
   async recognize(image, options = {}) {
-    const effort = normalizeOcrEffort(options.effort ?? this.#effort);
     const task = this.#queue.then(async () => {
-      const worker = await this.#getWorker();
-      const variants = await buildOcrVariants(image, effort);
-      const recognizedTexts = [];
+      const service = await this.#getService();
+      const result = await service.recognize(toArrayBuffer(image), {
+        flatten: true,
+      });
+      const text = typeof result.text === "string" ? result.text : "";
 
-      for (const variant of variants) {
-        const preparedImage = await prepareImageForOcr(image, variant);
-        const result = await worker.recognize(preparedImage);
-        const text = result.data.text;
-
-        recognizedTexts.push(text);
-
-        if (options.shouldStop?.(recognizedTexts.join("\n"))) {
-          break;
-        }
-      }
-
-      return recognizedTexts.join("\n");
+      options.shouldStop?.(text);
+      return text;
     });
 
     this.#queue = task.catch(() => undefined);
@@ -133,47 +74,25 @@ export class OcrService {
   }
 
   async recognizeWithFallback(image, options = {}) {
-    const shouldStop = options.shouldStop;
-    const lowText = await this.recognize(image, {
-      ...options,
-      effort: OCR_EFFORTS.LOW,
-    });
-
-    if (shouldStop?.(lowText)) {
-      return lowText;
-    }
-
-    const highText = await this.recognize(image, {
-      ...options,
-      effort: OCR_EFFORTS.HIGH,
-    });
-
-    if (!lowText) {
-      return highText;
-    }
-
-    if (!highText) {
-      return lowText;
-    }
-
-    return `${lowText}\n${highText}`;
+    return this.recognize(image, options);
   }
 
   async terminate() {
     await this.#queue;
 
-    if (this.#workerPromise) {
-      const worker = await this.#workerPromise;
-      await worker.terminate();
+    if (this.#servicePromise) {
+      const service = await this.#servicePromise;
+      await service.destroy();
     }
   }
 
-  #getWorker() {
-    this.#workerPromise ??= mkdir(this.#cachePath, { recursive: true }).then(() =>
-      createWorker("eng", undefined, {
-        cachePath: this.#cachePath,
-      }),
-    );
-    return this.#workerPromise;
+  #getService() {
+    this.#servicePromise ??= Promise.resolve().then(async () => {
+      const service = new PaddleOcrService({ model: V6_SMALL_MODEL });
+      await service.initialize();
+      return service;
+    });
+
+    return this.#servicePromise;
   }
 }

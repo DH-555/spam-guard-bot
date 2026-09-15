@@ -1236,6 +1236,7 @@ test("deletes the whole message when only one image matches", async () => {
         timeoutMs: 60_000,
       },
       ocrService: {
+        singlePass: true,
         recognize: async () => {
           ocrCalls += 1;
           return "nothing useful";
@@ -1254,7 +1255,7 @@ test("deletes the whole message when only one image matches", async () => {
     await handleMessage(message);
 
     assert.equal(deleted, 1);
-    assert.equal(ocrCalls, 2);
+    assert.equal(ocrCalls, 1);
     assert.equal(channelMessages.length, 1);
     assert.match(channelMessages[0].content, /Message deleted: <@user-1>/);
   } finally {
