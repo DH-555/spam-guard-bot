@@ -28,6 +28,7 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=manifests /app/generated ./generated
 COPY package.json ./
 COPY spam-messages.json ./spam-messages.json
+COPY spam-users.json ./spam-users.json
 COPY spam-description-patterns.json ./spam-description-patterns.json
 COPY blocked-domains.json ./blocked-domains.json
 COPY malicious-servers.json ./malicious-servers.json
