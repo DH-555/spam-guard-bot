@@ -3,6 +3,8 @@ import { performance } from "node:perf_hooks";
 import {
   containsScamPhrase,
   findSuspiciousText,
+  findOcrDetectionReasons,
+  OCR_DETECTION_REASONS,
   PARANOIA_LEVELS,
   truncateText,
 } from "./detection.js";
@@ -39,6 +41,24 @@ function resultLabel(result, locale) {
   }
 
   return t(locale, "moderation", "noPrefix", result.reason instanceof Error ? result.reason.message : String(result.reason));
+}
+
+const OCR_REASON_I18N_KEYS = Object.freeze({
+  [OCR_DETECTION_REASONS.KEYWORDS]: "ocrKeywords",
+  [OCR_DETECTION_REASONS.MR_BEAST]: "ocrMrBeast",
+  [OCR_DETECTION_REASONS.MALICIOUS_DOMAIN]: "ocrMaliciousDomain",
+  [OCR_DETECTION_REASONS.MALICIOUS_SERVER]: "ocrMaliciousServer",
+});
+
+function ocrDetectionMethod(locale, reasons) {
+  const labels = [...new Set(reasons ?? [])]
+    .map((reason) => OCR_REASON_I18N_KEYS[reason])
+    .filter(Boolean)
+    .map((key) => t(locale, "moderation", key));
+
+  return t(locale, "moderation", "ocrMatch", labels.length
+    ? labels
+    : [t(locale, "moderation", "ocrKeywords")]);
 }
 
 function recordAnalytics(analytics, method, ...args) {
@@ -173,6 +193,7 @@ async function findMatchingImage(
             kind: "maliciousServerInvite",
             maliciousInvite,
             text: lowText,
+            ocrReasons: [OCR_DETECTION_REASONS.MALICIOUS_SERVER],
           };
         }
 
@@ -188,7 +209,12 @@ async function findMatchingImage(
           );
 
           if (containsScamPhrase(lowText, paranoiaLevel)) {
-            return { source, kind: "ocr", text: lowText };
+            return {
+              source,
+              kind: "ocr",
+              text: lowText,
+              ocrReasons: findOcrDetectionReasons(lowText, paranoiaLevel),
+            };
           }
         } else {
           const highStartedAt = performance.now();
@@ -216,11 +242,17 @@ async function findMatchingImage(
               kind: "maliciousServerInvite",
               maliciousInvite,
               text: ocrText,
+              ocrReasons: [OCR_DETECTION_REASONS.MALICIOUS_SERVER],
             };
           }
 
           if (containsScamPhrase(ocrText, paranoiaLevel)) {
-            return { source, kind: "ocr", text: ocrText };
+            return {
+              source,
+              kind: "ocr",
+              text: ocrText,
+              ocrReasons: findOcrDetectionReasons(ocrText, paranoiaLevel),
+            };
           }
         }
       }
@@ -315,7 +347,7 @@ async function sendModerationAlert(
           )
       : match.kind === "easterEgg"
         ? t(locale, "moderation", "easterEggMatch")
-      : t(locale, "moderation", "ocrMatch");
+      : ocrDetectionMethod(locale, match.ocrReasons);
   const embed = new EmbedBuilder()
     .setColor(0xed4245)
     .setTitle(t(locale, "moderation", "alertTitle"))
@@ -459,6 +491,7 @@ async function sendMaliciousServerAlert(
   moderationChannelId,
   locale,
   recognizedText = null,
+  detectionMethod = null,
 ) {
   if (!moderationChannelId) {
     await sendFallbackNotice(message, locale);
@@ -487,6 +520,12 @@ async function sendMaliciousServerAlert(
           ? [{
               name: t(locale, "moderation", "recognizedText"),
               value: safeEmbedText(recognizedText) || t(locale, "moderation", "emptyText"),
+            }]
+          : []),
+        ...(detectionMethod
+          ? [{
+              name: t(locale, "moderation", "detectionMethod"),
+              value: detectionMethod,
             }]
           : []),
       )
@@ -973,6 +1012,7 @@ export function createMessageHandler({
           moderationChannelId,
           locale,
           match.text,
+          ocrDetectionMethod(locale, match.ocrReasons),
         );
       } catch (error) {
         console.error("[Malicious server protection] Could not send the notification:", error);

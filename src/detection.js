@@ -53,6 +53,13 @@ export const PARANOIA_LEVELS = Object.freeze({
   EXTREME: "extreme",
 });
 
+export const OCR_DETECTION_REASONS = Object.freeze({
+  KEYWORDS: "keywords",
+  MR_BEAST: "mrBeast",
+  MALICIOUS_DOMAIN: "maliciousDomain",
+  MALICIOUS_SERVER: "maliciousServer",
+});
+
 export const DEFAULT_PARANOIA_LEVEL = PARANOIA_LEVELS.HIGH;
 
 export function normalizeParanoiaLevel(level) {
@@ -108,15 +115,19 @@ export function normalizeOcrText(text) {
     .toUpperCase();
 }
 
-export function containsScamPhrase(text, paranoiaLevel = DEFAULT_PARANOIA_LEVEL) {
+export function findOcrDetectionReasons(
+  text,
+  paranoiaLevel = DEFAULT_PARANOIA_LEVEL,
+) {
   const normalizedLevel = normalizeParanoiaLevel(paranoiaLevel);
+  const reasons = [];
 
   if (containsBlockedDomain(text)) {
-    return true;
+    reasons.push(OCR_DETECTION_REASONS.MALICIOUS_DOMAIN);
   }
 
   if (normalizedLevel === PARANOIA_LEVELS.LOW) {
-    return false;
+    return reasons;
   }
 
   const rawText = text;
@@ -132,19 +143,35 @@ export function containsScamPhrase(text, paranoiaLevel = DEFAULT_PARANOIA_LEVEL)
     hasAnyPhrase(normalizedText, EXTREME_KEYWORDS);
 
   if (normalizedLevel === PARANOIA_LEVELS.MEDIUM) {
-    return hasWithdrawalKeyword && hasSuccessKeyword && hasUsdtKeyword;
+    if (hasWithdrawalKeyword && hasSuccessKeyword && hasUsdtKeyword) {
+      reasons.push(OCR_DETECTION_REASONS.KEYWORDS);
+    }
+
+    return reasons;
   }
 
   if (normalizedLevel === PARANOIA_LEVELS.EXTREME) {
-    return hasExtremeKeyword;
+    if (hasExtremeKeyword) {
+      reasons.push(OCR_DETECTION_REASONS.MR_BEAST);
+    }
+
+    return reasons;
   }
 
-  return (
+  if (
     hasWithdrawalKeyword &&
     (hasSuccessKeyword ||
       hasUsdtKeyword ||
       (hasAmountKeyword && hasCompletedKeyword && hasTransferKeyword))
-  );
+  ) {
+    reasons.push(OCR_DETECTION_REASONS.KEYWORDS);
+  }
+
+  return reasons;
+}
+
+export function containsScamPhrase(text, paranoiaLevel = DEFAULT_PARANOIA_LEVEL) {
+  return findOcrDetectionReasons(text, paranoiaLevel).length > 0;
 }
 
 /** Detects high-signal scam advertisements in message text without relying on exact copies. */

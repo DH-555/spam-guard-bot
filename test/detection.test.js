@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import {
   containsScamPhrase,
   containsBlockedDomain,
+  findOcrDetectionReasons,
   findSuspiciousText,
   DEFAULT_PARANOIA_LEVEL,
+  OCR_DETECTION_REASONS,
   PARANOIA_LEVELS,
   normalizeOcrText,
   normalizeParanoiaLevel,
@@ -66,6 +68,21 @@ test("detects blocked domains in OCR at every paranoia level", () => {
 
   assert.equal(containsBlockedDomain("betchoco.com"), true);
   assert.equal(containsBlockedDomain("safe.example"), false);
+});
+
+test("reports the category that caused an OCR detection", () => {
+  assert.deepEqual(
+    findOcrDetectionReasons("Visit wenowin.com", PARANOIA_LEVELS.LOW),
+    [OCR_DETECTION_REASONS.MALICIOUS_DOMAIN],
+  );
+  assert.deepEqual(
+    findOcrDetectionReasons("mr beast giveaway", PARANOIA_LEVELS.EXTREME),
+    [OCR_DETECTION_REASONS.MR_BEAST],
+  );
+  assert.deepEqual(
+    findOcrDetectionReasons("Withdrawal\nSucceeded"),
+    [OCR_DETECTION_REASONS.KEYWORDS],
+  );
 });
 
 test("allows the required keywords to be far apart", () => {

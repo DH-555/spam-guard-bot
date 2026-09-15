@@ -851,6 +851,10 @@ test("resolves malicious Discord invites found inside image OCR", async () => {
     assert.equal(moderationMessages[0].embeds[0].data.title, "Malicious server invite blocked");
     assert.match(moderationMessages[0].embeds[0].data.fields[2].value, /123456789012345678/);
     assert.match(moderationMessages[0].embeds[0].data.fields[7].value, /DISCORD\.GG\/PIPER/);
+    assert.equal(
+      moderationMessages[0].embeds[0].data.fields.find((field) => field.name === "Detection method").value,
+      "OCR + Malicious servers",
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
