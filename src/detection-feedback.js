@@ -10,6 +10,21 @@ const feedbacks = new Map();
 const FEEDBACK_TTL_MS = 15 * 60_000;
 const MAX_FEEDBACKS = 1_000;
 
+function recordFeedbackAnalytics(analytics, value) {
+  if (typeof analytics?.recordFeedback !== "function") return;
+
+  try {
+    const result = analytics.recordFeedback(value);
+    if (result && typeof result.catch === "function") {
+      void result.catch((error) => {
+        console.warn("[Analytics] Could not record feedback:", error);
+      });
+    }
+  } catch (error) {
+    console.warn("[Analytics] Could not record feedback:", error);
+  }
+}
+
 function pruneFeedbacks(now = Date.now()) {
   for (const [id, feedback] of feedbacks) {
     if (feedback.expiresAt <= now) {
@@ -52,7 +67,7 @@ export function createDetectionFeedback(match, message, locale = resolveLocale(m
   };
 }
 
-export async function handleDetectionFeedback(interaction, { sendFeedback = true } = {}) {
+export async function handleDetectionFeedback(interaction, { sendFeedback = true } = {}, analytics = null) {
   if (!interaction.isButton()) return false;
   const match = /^detection-feedback:(true|false):([0-9a-f-]{36})$/u.exec(interaction.customId);
   if (!match) return false;
@@ -97,6 +112,7 @@ export async function handleDetectionFeedback(interaction, { sendFeedback = true
     files: feedback.imageUrls.map((url) => ({ attachment: url })),
     allowedMentions: { parse: [] },
   });
+  recordFeedbackAnalytics(analytics, value);
   feedbacks.delete(id);
   await interaction.update({ components: [] });
   return true;

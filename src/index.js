@@ -23,11 +23,17 @@ import {
 } from "./setup-command.js";
 import { handleDetectionFeedback } from "./detection-feedback.js";
 import { handleSpamReportMessage } from "./spam-report.js";
+import { AnalyticsStore } from "./analytics.js";
 
 const config = loadConfig();
 const ocrService = new OcrService();
 const settingsStore = new SettingsStore(resolve("data/settings.json"));
+const analyticsStore = new AnalyticsStore(
+  resolve("data/analytics.json"),
+  config.sendFeedback,
+);
 await settingsStore.load();
+await analyticsStore.load();
 
 const visualReferenceHashes = await loadVisualReferenceManifest(
   config.visualReferenceManifestPath,
@@ -86,8 +92,13 @@ const handleMessage = createMessageHandler({
   easterEggMatcher,
   maliciousGuildIds: MALICIOUS_GUILD_IDS,
   nsfwServerKeywords: NSFW_SERVER_KEYWORDS,
+  analytics: analyticsStore,
 });
-const handleSetupCommand = createSetupCommandHandler({ settingsStore, config });
+const handleSetupCommand = createSetupCommandHandler({
+  settingsStore,
+  config,
+  analytics: analyticsStore,
+});
 
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Bot connected as ${readyClient.user.tag}.`);
@@ -110,7 +121,7 @@ client.on(Events.GuildCreate, (guild) => {
 });
 
 client.on(Events.MessageCreate, (message) => {
-  void handleSpamReportMessage(message, config).catch((error) => console.error("[Spam report] Failed:", error));
+  void handleSpamReportMessage(message, config, analyticsStore).catch((error) => console.error("[Spam report] Failed:", error));
   void handleMessage(message).catch((error) => {
     console.error(
       `[Moderation] Failed to process message ${message.id}:`,
@@ -130,7 +141,7 @@ client.on(Events.MessageUpdate, (_oldMessage, newMessage) => {
 
 client.on(Events.InteractionCreate, (interaction) => {
   if (interaction.isButton() && interaction.customId.startsWith("detection-feedback:")) {
-    void handleDetectionFeedback(interaction, config).catch((error) => {
+    void handleDetectionFeedback(interaction, config, analyticsStore).catch((error) => {
       console.error("[Detection feedback] Failed to process feedback:", error);
       if (!interaction.replied && !interaction.deferred) {
         void interaction.reply({ content: "No se pudo enviar el feedback.", ephemeral: true });
@@ -161,6 +172,7 @@ client.on(Events.Error, (error) => {
 async function shutdown(signal) {
   console.log(`Received ${signal}. Shutting down...`);
   client.destroy();
+  await analyticsStore.flush();
   await ocrService.terminate();
   process.exit(0);
 }

@@ -8,6 +8,7 @@ import { DM_POLICIES, PARANOIA_LEVELS, normalizeParanoiaLevel } from "./detectio
 import { resolveLocale, t } from "./i18n.js";
 import { isDiscordGuildId } from "./invite-protection.js";
 import { RAID_LEVELS } from "./raid-protection.js";
+import { createEmptyAnalyticsSnapshot } from "./analytics.js";
 
 const setupCommand = new SlashCommandBuilder()
   .setName("setup")
@@ -199,6 +200,19 @@ const setupCommand = new SlashCommandBuilder()
       .setDescription("Show the current configuration for this server."),
   );
 
+const spamCommand = new SlashCommandBuilder()
+  .setName("spam")
+  .setDescription("View global anonymous spam analytics.")
+  .setDefaultMemberPermissions(
+    PermissionFlagsBits.ManageMessages | PermissionFlagsBits.ManageGuild,
+  )
+  .setDMPermission(false)
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("analytics")
+      .setDescription("View anonymous statistics from all bot servers."),
+  );
+
 function formatParanoiaLevel(locale, level) {
   switch (normalizeParanoiaLevel(level)) {
     case PARANOIA_LEVELS.LOW:
@@ -243,17 +257,85 @@ export async function registerSetupCommands(client) {
 }
 
 export async function registerSetupCommandForGuild(guild) {
-  await guild.commands.set([setupCommand.toJSON()]);
+  await guild.commands.set([setupCommand.toJSON(), spamCommand.toJSON()]);
 }
 
-export function createSetupCommandHandler({ settingsStore, config }) {
+function formatAnalytics(locale, snapshot) {
+  const { detections, feedback } = snapshot;
+  const totalDetections = Object.values(detections).reduce(
+    (total, count) => total + count,
+    0,
+  );
+
+  return [
+    t(locale, "setup", "analyticsTitle"),
+    t(locale, "setup", "analyticsScope"),
+    "",
+    `${t(locale, "setup", "analyticsTotalDetections")}: ${totalDetections}`,
+    `${t(locale, "setup", "analyticsImageOcr")}: ${detections.imageOcr}`,
+    `${t(locale, "setup", "analyticsImageVisual")}: ${detections.imageVisual}`,
+    `${t(locale, "setup", "analyticsTextScam")}: ${detections.textScam}`,
+    `${t(locale, "setup", "analyticsSpamMessage")}: ${detections.spamMessage}`,
+    `${t(locale, "setup", "analyticsBlockedLink")}: ${detections.blockedLink}`,
+    `${t(locale, "setup", "analyticsMaliciousInvite")}: ${detections.maliciousServerInvite + detections.imageMaliciousServerInvite}`,
+    `${t(locale, "setup", "analyticsNsfwInvite")}: ${detections.nsfwServerInvite}`,
+    `${t(locale, "setup", "analyticsRaid")}: ${detections.raid}`,
+    `${t(locale, "setup", "analyticsKnownChannel")}: ${detections.imageKnownChannel}`,
+    "",
+    `${t(locale, "setup", "analyticsManualReports")}: ${snapshot.manualSpamReports}`,
+    `${t(locale, "setup", "analyticsCorrectFeedback")}: ${feedback.correct}`,
+    `${t(locale, "setup", "analyticsFalseFeedback")}: ${feedback.false}`,
+  ].join("\n");
+}
+
+export function createSetupCommandHandler({ settingsStore, config, analytics }) {
   return async function handleSetupCommand(interaction) {
-    if (
-      !interaction.isChatInputCommand() ||
-      interaction.commandName !== "setup"
-    ) {
+    if (!interaction.isChatInputCommand()) {
       return;
     }
+
+    if (interaction.commandName === "spam") {
+      if (!interaction.inGuild()) {
+        await interaction.reply({
+          content: t(resolveLocale(interaction), "setup", "onlyInServer"),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const canViewAnalytics =
+        interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages) ||
+        interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
+      if (!canViewAnalytics) {
+        await interaction.reply({
+          content: t(resolveLocale(interaction), "setup", "analyticsPermissionRequired"),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      if (interaction.options.getSubcommand() !== "analytics") return;
+
+      const locale = resolveLocale(interaction);
+      if (config.sendFeedback === false) {
+        await interaction.reply({
+          content: t(locale, "setup", "analyticsDisabled"),
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      await interaction.reply({
+        content: formatAnalytics(
+          locale,
+          analytics?.getSnapshot?.() ?? createEmptyAnalyticsSnapshot(),
+        ),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    if (interaction.commandName !== "setup") return;
 
     if (!interaction.inGuild()) {
       await interaction.reply({

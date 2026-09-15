@@ -4,19 +4,34 @@ import { getTrustedImageUrls } from "./images.js";
 import { resolveLocale, t } from "./i18n.js";
 import { escapeDiscordMarkdown, sanitizeLogText } from "./security.js";
 
-export async function handleSpamReport(interaction, { sendFeedback = true } = {}) {
+function recordManualReportAnalytics(analytics) {
+  if (typeof analytics?.recordManualSpamReport !== "function") return;
+
+  try {
+    const result = analytics.recordManualSpamReport();
+    if (result && typeof result.catch === "function") {
+      void result.catch((error) => {
+        console.warn("[Analytics] Could not record manual spam report:", error);
+      });
+    }
+  } catch (error) {
+    console.warn("[Analytics] Could not record manual spam report:", error);
+  }
+}
+
+export async function handleSpamReport(interaction, { sendFeedback = true } = {}, analytics = null) {
   if (!interaction.isMessageContextMenuCommand() || interaction.commandName !== "spamreport") return false;
   if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.ManageMessages)) {
     await interaction.reply({ content: "Necesitas permiso para gestionar mensajes.", ephemeral: true, allowedMentions: { parse: [] } });
     return true;
   }
   const targetMessage = interaction.targetMessage;
-  const result = await reportSpamMessage(interaction.client, interaction.guild, targetMessage, interaction.user.tag, interaction.user.id, sendFeedback);
+  const result = await reportSpamMessage(interaction.client, interaction.guild, targetMessage, interaction.user.tag, interaction.user.id, sendFeedback, analytics);
   await interaction.reply({ content: formatReportResult(result), ephemeral: true, allowedMentions: { parse: [] } });
   return true;
 }
 
-export async function handleSpamReportMessage(message, { sendFeedback = true } = {}) {
+export async function handleSpamReportMessage(message, { sendFeedback = true } = {}, analytics = null) {
   if (message.author.bot || !message.inGuild() || message.content.trim().toLowerCase() !== "!spamreport") return false;
 
   try {
@@ -59,6 +74,7 @@ export async function handleSpamReportMessage(message, { sendFeedback = true } =
       message.author.tag,
       message.author.id,
       sendFeedback,
+      analytics,
     );
     await message.reply({
       content: formatReportResult(result),
@@ -92,7 +108,7 @@ function formatReportResult(result) {
   return `${timeoutStatus} Mensajes iguales eliminados: ${result.deleted}.`;
 }
 
-async function reportSpamMessage(client, guild, targetMessage, reporterTag, reporterId, sendFeedback = true) {
+async function reportSpamMessage(client, guild, targetMessage, reporterTag, reporterId, sendFeedback = true, analytics = null) {
   const locale = resolveLocale(guild);
   const user = targetMessage.author;
   const content = targetMessage.content;
@@ -169,6 +185,10 @@ async function reportSpamMessage(client, guild, targetMessage, reporterTag, repo
     } catch (error) {
       console.warn("[Spam report] Could not send the central feedback report:", error);
     }
+  }
+
+  if (sendFeedback) {
+    recordManualReportAnalytics(analytics);
   }
 
   return { deleted, timedOut };

@@ -23,6 +23,7 @@ import { createDetectionFeedback } from "./detection-feedback.js";
 import { findKnownScamImageChannel } from "./scam-image-channels.js";
 import { OCR_EFFORTS } from "./ocr.js";
 import { escapeDiscordMarkdown, sanitizeLogText } from "./security.js";
+import { ANALYTICS_DETECTION_TYPES } from "./analytics.js";
 
 const REASON =
   "Image detected by moderation rules.";
@@ -38,6 +39,21 @@ function resultLabel(result, locale) {
   }
 
   return t(locale, "moderation", "noPrefix", result.reason instanceof Error ? result.reason.message : String(result.reason));
+}
+
+function recordAnalytics(analytics, method, ...args) {
+  if (typeof analytics?.[method] !== "function") return;
+
+  try {
+    const result = analytics[method](...args);
+    if (result && typeof result.catch === "function") {
+      void result.catch((error) => {
+        console.warn(`[Analytics] Could not record ${method}:`, error);
+      });
+    }
+  } catch (error) {
+    console.warn(`[Analytics] Could not record ${method}:`, error);
+  }
 }
 
 async function findMatchingImage(
@@ -716,6 +732,7 @@ export function createMessageHandler({
   easterEggMatcher,
   maliciousGuildIds = [],
   nsfwServerKeywords = NSFW_SERVER_KEYWORDS,
+  analytics = null,
 }) {
   const raidTracker = new RaidTracker();
   const resolveInvite = createInviteResolver(client);
@@ -765,6 +782,7 @@ export function createMessageHandler({
 
     const blockedLink = blockedLinkProtection.enabled ? findBlockedLink(message.content) : null;
     if (blockedLink) {
+      recordAnalytics(analytics, "recordDetection", "blockedLink");
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
         message, member, timeoutMs, "Blocked link protection triggered.", locale,
       );
@@ -791,6 +809,7 @@ export function createMessageHandler({
       message.author.createdTimestamp,
     );
     if (suspiciousText) {
+      recordAnalytics(analytics, "recordDetection", "textScam");
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
         message, member, timeoutMs, "Suspicious scam advertisement detected.", locale,
       );
@@ -810,6 +829,7 @@ export function createMessageHandler({
       );
 
       if (maliciousInvite) {
+        recordAnalytics(analytics, "recordDetection", "maliciousServerInvite");
         const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
           message, member, timeoutMs, "Malicious server invite protection triggered.", locale,
         );
@@ -840,6 +860,7 @@ export function createMessageHandler({
       );
 
       if (nsfwInvite) {
+        recordAnalytics(analytics, "recordDetection", "nsfwServerInvite");
         const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
           message, member, timeoutMs, "NSFW server invite protection triggered.", locale,
         );
@@ -872,6 +893,7 @@ export function createMessageHandler({
           : null,
       });
       if (raidEntries) {
+        recordAnalytics(analytics, "recordDetection", "raid");
         const timeoutResult = await Promise.allSettled([
           timeoutMember(message.guild, member, timeoutMs, "Anti-raid protection triggered.", locale),
         ]);
@@ -889,6 +911,7 @@ export function createMessageHandler({
       ? "Known spam user"
       : spam.enabled ? findSpamMessage(spamText) : null;
     if (spamMessage) {
+      recordAnalytics(analytics, "recordDetection", "spamMessage");
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
         message, member, timeoutMs, "Spam message protection triggered.", locale,
       );
@@ -930,6 +953,7 @@ export function createMessageHandler({
     }
 
     if (match.kind === "maliciousServerInvite") {
+      recordAnalytics(analytics, "recordDetection", "imageMaliciousServerInvite");
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
         message,
         member,
@@ -959,6 +983,15 @@ export function createMessageHandler({
     const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
       message, member, timeoutMs, REASON, locale,
     );
+
+    const analyticsType = {
+      ocr: "imageOcr",
+      visual: "imageVisual",
+      knownScamImageChannel: "imageKnownChannel",
+    }[match.kind];
+    if (ANALYTICS_DETECTION_TYPES.includes(analyticsType)) {
+      recordAnalytics(analytics, "recordDetection", analyticsType);
+    }
 
     try {
       if (moderationChannelId) {

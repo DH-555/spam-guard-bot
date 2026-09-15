@@ -145,6 +145,21 @@ Moderators can report a repeated message by replying to it with:
 The bot applies a timeout and removes matching messages from the user across
 the server's accessible text channels.
 
+## Global anonymous analytics
+
+Administrators and moderators can view aggregate statistics from all servers
+where the bot is installed with:
+
+```text
+/spam analytics
+```
+
+The statistics contain only global counters for detections, manual spam
+reports, and feedback votes. They do not store server, user, message, image,
+URL, or OCR information, and they are not specific to the server where the
+command is run. `SEND_FEEDBACK=false` disables both collection and display of
+these statistics.
+
 ## Malicious server invite protection
 
 The bot can resolve Discord invitation links and compare the destination
@@ -385,6 +400,8 @@ docker compose down
 The Compose configuration creates two named volumes:
 
 - `bot-data` stores the per-server moderation channel configuration.
+- `bot-data` also stores the anonymous aggregate analytics counters when
+  `SEND_FEEDBACK` is enabled.
 - `ocr-cache` stores the downloaded Tesseract English language data.
 
 Both volumes survive container recreation and image upgrades. Running
