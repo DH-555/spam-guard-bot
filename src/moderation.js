@@ -561,7 +561,16 @@ async function sendNsfwServerAlert(
         { name: t(locale, "moderation", "user"), value: `${message.author} (\`${message.author.id}\`)` },
         { name: t(locale, "moderation", "channel"), value: `${message.channel} (\`${message.channelId}\`)` },
         { name: t(locale, "moderation", "serverName"), value: safeEmbedText(nsfwInvite.guildName || t(locale, "moderation", "unknown")) || t(locale, "moderation", "unknown") },
-        { name: t(locale, "moderation", "matchedKeyword"), value: safeEmbedText(nsfwInvite.keyword, 256), inline: true },
+        {
+          name: t(locale, "moderation", "matchedDetection"),
+          value: safeEmbedText(
+            nsfwInvite.keyword === "Discord age-restricted server"
+              ? nsfwInvite.keyword
+              : t(locale, "moderation", "keywordDetection", nsfwInvite.keyword),
+            256,
+          ),
+          inline: true,
+        },
         { name: t(locale, "moderation", "serverId"), value: `\`${nsfwInvite.guildId}\``, inline: true },
         { name: t(locale, "moderation", "inviteCode"), value: `\`${nsfwInvite.code}\``, inline: true },
         { name: t(locale, "moderation", "timeout", Math.round(timeoutMs / 60_000)), value: resultLabel(timeoutResult, locale), inline: true },

@@ -929,6 +929,10 @@ test("blocks invites to servers with NSFW names and alerts moderators", async ()
   assert.equal(moderationMessages.length, 1);
   assert.equal(moderationMessages[0].embeds[0].data.title, "NSFW server invite blocked");
   assert.match(moderationMessages[0].embeds[0].data.fields[2].value, /Official NSFW \+18/);
+  assert.deepEqual(
+    moderationMessages[0].embeds[0].data.fields.find((field) => field.name === "Matched detection"),
+    { name: "Matched detection", value: "Keyword: nsfw", inline: true },
+  );
 });
 
 test("ignores listed spam messages from members with excluded roles", async () => {
