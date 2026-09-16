@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findSpamMessage, getSpamText, normalizeSpamText } from "../src/spam-messages.js";
+import { findSpamMessage, getMessageText, getSpamText, normalizeSpamText } from "../src/spam-messages.js";
 
 test("normalizes spam text and matches a listed phrase", () => {
   assert.equal(normalizeSpamText("  ¡PREMIO!  "), "¡premio!");
@@ -42,4 +42,23 @@ test("includes embed and forwarded snapshot descriptions", () => {
   };
 
   assert.equal(getSpamText(message), "server description\nforwarded description");
+});
+
+test("includes forwarded message content and embed URLs in the shared text", () => {
+  const message = {
+    content: "outer message",
+    embeds: [],
+    messageSnapshots: new Map([
+      ["snapshot", {
+        content: "forwarded message https://surveybuilder.io/c/capture/mhnkqthus3a",
+        embeds: [{ url: "https://agentrouter.org/register?aff=qaiK" }],
+        messageSnapshots: new Map(),
+      }],
+    ]),
+  };
+
+  const text = getMessageText(message);
+  assert.match(text, /forwarded message/);
+  assert.match(text, /surveybuilder\.io/);
+  assert.match(text, /agentrouter\.org/);
 });

@@ -19,7 +19,7 @@ import { createInviteResolver, findMaliciousInvite } from "./invite-protection.j
 import { findBlockedLink } from "./blocked-links.js";
 import { findNsfwInvite, NSFW_SERVER_KEYWORDS } from "./nsfw-servers.js";
 import { getRaidFingerprint, RaidTracker } from "./raid-protection.js";
-import { findSpamMessage, getSpamText } from "./spam-messages.js";
+import { findSpamMessage, getMessageText } from "./spam-messages.js";
 import { isKnownSpamUser } from "./spam-users.js";
 import { createDetectionFeedback } from "./detection-feedback.js";
 import { findKnownScamImageChannel } from "./scam-image-channels.js";
@@ -100,7 +100,7 @@ async function findMatchingImage(
       .map((url) => findKnownScamImageChannel(url))
       .find(Boolean);
 
-    if (knownScamImageChannel && !source.forwarded) {
+    if (knownScamImageChannel) {
       console.log(
         `[Image analysis] ${sanitizeLogText(source.label)}: known scam-image source channel ` +
           `${knownScamImageChannel.channelId} (${knownScamImageChannel.name}).`,
@@ -151,7 +151,7 @@ async function findMatchingImage(
         }
       }
 
-      if (visualMatch && !source.forwarded) {
+      if (visualMatch) {
         console.log(
           `[Image analysis] ${sanitizeLogText(source.label)}: visual match "${sanitizeLogText(visualMatch.reference.label)}" ` +
             `(distance ${visualMatch.distance}; download ${downloadMs.toFixed(0)} ms; ` +
@@ -256,52 +256,8 @@ async function findMatchingImage(
           }
         }
       }
-
-      // Forwarded photos must go through OCR even when their source channel or
-      // pixels are already known. Those signals remain the fallback result if
-      // OCR does not find a match.
-      if (source.forwarded) {
-        if (knownScamImageChannel) {
-          console.log(
-            `[Image analysis] ${sanitizeLogText(source.label)}: known scam-image source channel ` +
-              `${knownScamImageChannel.channelId} (${knownScamImageChannel.name}).`,
-          );
-          return {
-            source,
-            kind: "knownScamImageChannel",
-            knownScamImageChannel,
-            ocrAttempted,
-            text: ocrText,
-          };
-        }
-
-        if (visualMatch) {
-          console.log(
-            `[Image analysis] ${sanitizeLogText(source.label)}: visual match "${sanitizeLogText(visualMatch.reference.label)}" ` +
-              `(distance ${visualMatch.distance}; download ${downloadMs.toFixed(0)} ms; ` +
-              `hash ${visualMs.toFixed(0)} ms; OCR attempted; total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
-          );
-          return {
-            source,
-            kind: "visual",
-            visualMatch,
-            ocrAttempted,
-          };
-        }
-      }
     } catch (error) {
       console.error(`[Image analysis] Could not analyze ${sanitizeLogText(source.label)}:`, error);
-
-      // Keep the URL-based protection available if a forwarded image cannot be
-      // downloaded or decoded for OCR.
-      if (source.forwarded && knownScamImageChannel) {
-        return {
-          source,
-          kind: "knownScamImageChannel",
-          knownScamImageChannel,
-          ocrAttempted: false,
-        };
-      }
     }
   }
 
@@ -824,11 +780,12 @@ export function createMessageHandler({
     const blockedLinkProtection = settingsStore.getBlockedLinkProtection?.(message.guildId) ?? { enabled: true };
     const locale = resolveLocale(message.guild);
     const threadTitle = getThreadTitle(message);
-    const messageAndThreadTitle = [message.content, threadTitle]
+    const messageText = getMessageText(message);
+    const messageAndThreadTitle = [messageText, threadTitle]
       .filter((value) => typeof value === "string" && value.length > 0)
       .join("\n");
 
-    const blockedLink = blockedLinkProtection.enabled ? findBlockedLink(message.content) : null;
+    const blockedLink = blockedLinkProtection.enabled ? findBlockedLink(messageText) : null;
     if (blockedLink) {
       recordAnalytics(analytics, "recordDetection", "blockedLink");
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
@@ -852,7 +809,7 @@ export function createMessageHandler({
     }
 
     const suspiciousText = findSuspiciousText(
-      [getSpamText(message), threadTitle].filter(Boolean).join("\n"),
+      [messageText, threadTitle].filter(Boolean).join("\n"),
       settingsStore.getTextScamProtection?.(message.guildId),
       message.author.createdTimestamp,
     );
@@ -862,7 +819,7 @@ export function createMessageHandler({
         message, member, timeoutMs, "Suspicious scam advertisement detected.", locale,
       );
       try {
-        await sendSpamAlert(client, message, suspiciousText, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale, { text: getSpamText(message) }, config.sendFeedback !== false);
+        await sendSpamAlert(client, message, suspiciousText, timeoutResult, deleteResult, timeoutMs, moderationChannelId, locale, { text: messageText }, config.sendFeedback !== false);
       } catch (error) {
         console.error("[Text scam protection] Could not send the notification:", error);
       }
@@ -954,7 +911,7 @@ export function createMessageHandler({
       }
     }
 
-    const spamText = getSpamText(message);
+    const spamText = messageText;
     const spamMessage = isKnownSpamUser(message.author.id)
       ? "Known spam user"
       : spam.enabled ? findSpamMessage(spamText) : null;

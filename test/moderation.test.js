@@ -447,7 +447,107 @@ test("detects a malicious forwarded image and moderates the outer message", asyn
 
     await handleMessage(message);
 
-    assert.equal(ocrCalls, 2);
+    assert.equal(ocrCalls, 0);
+    assert.equal(deleted, 1);
+    assert.equal(timeoutCalls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("matches a forwarded image hash before attempting OCR", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
+  const sourceDirectory = await mkdtemp(join(tmpdir(), "forwarded-visual-"));
+  await sharp(imageBuffer).toFile(join(sourceDirectory, "scam.png"));
+  const manifest = await writeVisualReferenceManifest(
+    sourceDirectory,
+    join(sourceDirectory, "manifest.json"),
+  );
+  const visualMatcher = await buildVisualReferenceMatcher(manifest.references, 0);
+  let deleted = 0;
+  let timeoutCalls = 0;
+  let ocrCalls = 0;
+  const user = {
+    id: "forwarded-visual-user",
+    tag: "forwarded-visual-user#0001",
+    bot: false,
+    displayAvatarURL: () => "https://example.com/avatar.png",
+    toString: () => "<@forwarded-visual-user>",
+  };
+  const message = {
+    id: "forwarded-visual-message",
+    guildId: "guild-1",
+    channelId: "channel-1",
+    content: "",
+    author: user,
+    channel: {
+      isTextBased: () => true,
+      isSendable: () => true,
+      send: async () => {},
+    },
+    guild: { preferredLocale: "en-US", ownerId: "owner-1" },
+    attachments: new Map(),
+    embeds: [],
+    messageSnapshots: new Map([[
+      "snapshot",
+      {
+        content: "forwarded scam image",
+        attachments: new Map([[
+          "forwarded-image",
+          {
+            id: "forwarded-image",
+            name: "scam.png",
+            contentType: "image/png",
+            size: imageBuffer.length,
+            url: "https://cdn.discordapp.com/attachments/123456789012345678/1540534318554677288/scam.png",
+          },
+        ]]),
+        embeds: [],
+        messageSnapshots: new Map(),
+      },
+    ]]),
+    member: {
+      moderatable: true,
+      permissions: { has: () => false },
+      timeout: async () => { timeoutCalls += 1; },
+    },
+    delete: async () => { deleted += 1; },
+    webhookId: null,
+    inGuild: () => true,
+  };
+
+  try {
+    const handleMessage = createMessageHandler({
+      client: {},
+      config: {
+        maxImageBytes: 1024,
+        maxImagePixels: 16_000_000,
+        imageDownloadTimeoutMs: 1000,
+        timeoutMs: 60_000,
+      },
+      visualMatcher,
+      ocrService: {
+        recognize: async () => {
+          ocrCalls += 1;
+          return "";
+        },
+      },
+      settingsStore: {
+        getModerationChannelId: () => null,
+        getParanoiaLevel: () => "high",
+        getExcludedRoleIds: () => [],
+        getExcludedAdministrators: () => true,
+        getTimeoutMs: () => null,
+        getRaidProtection: () => ({ enabled: false }),
+        getSpamProtection: () => ({ enabled: false }),
+      },
+    });
+
+    await handleMessage(message);
+
+    assert.equal(ocrCalls, 0);
     assert.equal(deleted, 1);
     assert.equal(timeoutCalls, 1);
   } finally {

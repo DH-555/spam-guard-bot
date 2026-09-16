@@ -91,21 +91,52 @@ export function findSpamMessage(content, spamMessages = SPAM_MESSAGES, descripti
   return null;
 }
 
-export function getSpamText(message) {
-  const parts = [message?.content ?? ""];
+export function getMessageText(message) {
+  const parts = [];
+  const visited = new Set();
 
-  function collectDescriptions(currentMessage) {
-    for (const embed of currentMessage?.embeds ?? []) {
-      if (embed.description) {
-        parts.push(embed.description);
-      }
-    }
-
-    for (const snapshot of currentMessage?.messageSnapshots?.values?.() ?? []) {
-      collectDescriptions(snapshot);
+  function add(value) {
+    if (typeof value === "string" && value.trim()) {
+      parts.push(value);
     }
   }
 
-  collectDescriptions(message);
-  return parts.filter(Boolean).join("\n");
+  function collect(currentMessage) {
+    if (!currentMessage || typeof currentMessage !== "object" || visited.has(currentMessage)) {
+      return;
+    }
+
+    visited.add(currentMessage);
+    add(currentMessage.content);
+
+    for (const embed of currentMessage.embeds ?? []) {
+      add(embed?.title);
+      add(embed?.description);
+      add(embed?.url);
+      add(embed?.author?.name);
+      add(embed?.author?.url);
+      add(embed?.footer?.text);
+
+      for (const field of embed?.fields ?? []) {
+        add(field?.name);
+        add(field?.value);
+      }
+    }
+
+    for (const attachment of currentMessage.attachments?.values?.() ?? []) {
+      add(attachment?.description);
+      add(attachment?.url);
+    }
+
+    for (const snapshot of currentMessage.messageSnapshots?.values?.() ?? []) {
+      collect(snapshot);
+    }
+  }
+
+  collect(message);
+  return parts.join("\n");
+}
+
+export function getSpamText(message) {
+  return getMessageText(message);
 }
