@@ -741,7 +741,12 @@ export function createMessageHandler({
   const raidTracker = new RaidTracker();
   const resolveInvite = createInviteResolver(client);
   return async function handleMessage(message) {
-    if (!message.inGuild() || message.author.bot || message.webhookId) {
+    if (!message.inGuild() || message.webhookId) {
+      return;
+    }
+
+    const botDetection = settingsStore.getBotDetection?.(message.guildId) ?? { enabled: false };
+    if (message.author.bot && !botDetection.enabled) {
       return;
     }
 

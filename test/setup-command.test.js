@@ -55,6 +55,39 @@ test("registers /spam analytics alongside /setup", async () => {
 
   assert.deepEqual(commands.map((command) => command.name), ["setup", "spam"]);
   assert.deepEqual(commands[1].options.map((option) => option.name), ["analytics"]);
+  assert.ok(commands[0].options.some((option) => option.name === "bot-detection"));
+});
+
+test("configures bot message detection per server", async () => {
+  let saved;
+  const replies = [];
+  const handler = createSetupCommandHandler({
+    config: { timeoutMs: 60_000 },
+    settingsStore: {
+      setBotDetection: async (guildId, enabled) => {
+        saved = { guildId, enabled };
+      },
+    },
+  });
+  const interaction = {
+    commandName: "setup",
+    guildId: "guild-1",
+    guildLocale: "es-ES",
+    isChatInputCommand: () => true,
+    inGuild: () => true,
+    memberPermissions: { has: () => true },
+    options: {
+      getSubcommand: () => "bot-detection",
+      getSubcommandGroup: () => null,
+      getBoolean: () => true,
+    },
+    reply: async (payload) => replies.push(payload),
+  };
+
+  await handler(interaction);
+
+  assert.deepEqual(saved, { guildId: "guild-1", enabled: true });
+  assert.match(replies[0].content, /detección de mensajes de bots está activada/i);
 });
 
 test("shows global analytics only to moderators and administrators", async () => {

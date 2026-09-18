@@ -24,9 +24,11 @@ test("stores moderation channels separately for each guild", async () => {
   await store.addBlockedGuildId("guild-1", "123456789012345678");
   assert.equal(store.getExcludedAdministrators("guild-1"), true);
   await store.setSpamProtection("guild-1", false);
+  await store.setBotDetection("guild-1", true);
   await store.setMaliciousServerProtection("guild-1", false);
   await store.setNsfwServerProtection("guild-1", false);
   assert.deepEqual(store.getSpamProtection("guild-1"), { enabled: false });
+  assert.deepEqual(store.getBotDetection("guild-1"), { enabled: true });
   assert.deepEqual(store.getMaliciousServerProtection("guild-1"), {
     enabled: false,
     blockedGuildIds: ["123456789012345678", "123456789012345679"],
@@ -47,6 +49,7 @@ test("stores moderation channels separately for each guild", async () => {
   assert.deepEqual(savedSettings["guild-1"].excludedRoleIds, ["role-1", "role-2"]);
   assert.equal(savedSettings["guild-1"].excludedAdministrators, undefined);
   assert.equal(savedSettings["guild-1"].spamProtection.enabled, false);
+  assert.equal(savedSettings["guild-1"].botDetection.enabled, true);
   assert.equal(savedSettings["guild-1"].maliciousServerProtection.enabled, false);
   assert.deepEqual(savedSettings["guild-1"].maliciousServerProtection.blockedGuildIds, [
     "123456789012345678",
@@ -76,6 +79,7 @@ test("loads previously saved settings", async () => {
   assert.deepEqual(secondStore.getExcludedRoleIds("guild-1"), ["role-1"]);
   assert.equal(secondStore.getExcludedAdministrators("guild-1"), false);
   assert.deepEqual(secondStore.getSpamProtection("guild-1"), { enabled: true });
+  assert.deepEqual(secondStore.getBotDetection("guild-1"), { enabled: false });
   assert.deepEqual(secondStore.getMaliciousServerProtection("guild-1"), {
     enabled: true,
     blockedGuildIds: ["123456789012345678"],
@@ -83,6 +87,7 @@ test("loads previously saved settings", async () => {
   assert.deepEqual(secondStore.getNsfwServerProtection("guild-1"), { enabled: true });
   assert.equal(secondStore.getModerationChannelId("unknown"), null);
   assert.equal(secondStore.getParanoiaLevel("unknown"), "high");
+  assert.deepEqual(secondStore.getBotDetection("unknown"), { enabled: false });
   assert.equal(secondStore.getTimeoutMs("unknown"), null);
   assert.deepEqual(secondStore.getExcludedRoleIds("unknown"), []);
   assert.equal(secondStore.getExcludedAdministrators("unknown"), true);

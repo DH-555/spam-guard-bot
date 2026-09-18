@@ -306,6 +306,68 @@ test("blocks a listed spam message without requiring an image", async () => {
   assert.match(channelMessages[0].content, /Message deleted: <@user-spammer>/);
 });
 
+test("ignores bot messages by default and detects them when enabled for the server", async () => {
+  let botDetectionEnabled = false;
+  let deleted = 0;
+  let timeoutCalls = 0;
+  const channelMessages = [];
+  const message = {
+    id: "bot-spam-message",
+    guildId: "guild-1",
+    channelId: "channel-1",
+    content: "FREE CRYPTO GIVEAWAY! Send crypto to receive double back.",
+    author: {
+      id: "spam-bot",
+      tag: "spam-bot#0001",
+      bot: true,
+      displayAvatarURL: () => "https://example.com/avatar.png",
+      toString: () => "<@spam-bot>",
+    },
+    channel: {
+      isTextBased: () => true,
+      isSendable: () => true,
+      send: async (payload) => channelMessages.push(payload),
+    },
+    guild: { preferredLocale: "en-US", ownerId: "owner-1" },
+    attachments: new Map(),
+    embeds: [],
+    messageSnapshots: new Map(),
+    member: {
+      moderatable: true,
+      permissions: { has: () => false },
+      timeout: async () => { timeoutCalls += 1; },
+    },
+    delete: async () => { deleted += 1; },
+    webhookId: null,
+    inGuild: () => true,
+  };
+  const handleMessage = createMessageHandler({
+    client: {},
+    config: { timeoutMs: 60_000 },
+    ocrService: { recognize: async () => "" },
+    settingsStore: {
+      getBotDetection: () => ({ enabled: botDetectionEnabled }),
+      getModerationChannelId: () => null,
+      getParanoiaLevel: () => "high",
+      getExcludedRoleIds: () => [],
+      getExcludedAdministrators: () => true,
+      getTimeoutMs: () => null,
+      getSpamProtection: () => ({ enabled: true }),
+    },
+  });
+
+  await handleMessage(message);
+  assert.equal(deleted, 0);
+  assert.equal(timeoutCalls, 0);
+
+  botDetectionEnabled = true;
+  await handleMessage(message);
+
+  assert.equal(deleted, 1);
+  assert.equal(timeoutCalls, 1);
+  assert.equal(channelMessages.length, 1);
+});
+
 test("times out before deleting spam and removes its single-message thread", async () => {
   const events = [];
   let threadDeleted = 0;

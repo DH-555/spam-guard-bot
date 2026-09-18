@@ -42,6 +42,13 @@ const setupCommand = new SlashCommandBuilder()
     .addBooleanOption((option) => option.setName("enabled").setDescription("Whether anti-raid is enabled.").setRequired(true))
     .addStringOption((option) => option.setName("level").setDescription("Sensitivity level.").setRequired(true)
       .addChoices({ name: "high", value: RAID_LEVELS.HIGH }, { name: "medium", value: RAID_LEVELS.MEDIUM }, { name: "low", value: RAID_LEVELS.LOW })))
+  .addSubcommand((subcommand) => subcommand
+    .setName("bot-detection")
+    .setDescription("Include messages sent by bots in detections.")
+    .addBooleanOption((option) => option
+      .setName("enabled")
+      .setDescription("Whether messages sent by bots should be detected.")
+      .setRequired(true)))
   .addSubcommandGroup((group) =>
     group
       .setName("spam")
@@ -430,6 +437,16 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
       return;
     }
 
+    if (subcommand === "bot-detection") {
+      const enabled = interaction.options.getBoolean("enabled", true);
+      await settingsStore.setBotDetection(interaction.guildId, enabled);
+      await interaction.reply({
+        content: t(locale, "setup", "botDetectionSaved", enabled),
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
     if (subcommandGroup === "spam" && subcommand === "messages") {
       const enabled = interaction.options.getBoolean("enabled", true);
       await settingsStore.setSpamProtection(interaction.guildId, enabled);
@@ -590,6 +607,7 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
       settingsStore.getExcludedAdministrators(interaction.guildId);
     const raid = settingsStore.getRaidProtection(interaction.guildId);
     const spam = settingsStore.getSpamProtection?.(interaction.guildId) ?? { enabled: true };
+    const botDetection = settingsStore.getBotDetection?.(interaction.guildId) ?? { enabled: false };
     const maliciousServers = settingsStore.getMaliciousServerProtection(interaction.guildId);
     const nsfwServers = settingsStore.getNsfwServerProtection(interaction.guildId);
     await interaction.reply({
@@ -607,6 +625,7 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
         ),
         t(locale, "setup", "currentAntiRaid", raid.enabled, raid.level),
         t(locale, "setup", "currentSpam", spam.enabled),
+        t(locale, "setup", "currentBotDetection", botDetection.enabled),
         t(
           locale,
           "setup",
