@@ -113,6 +113,26 @@ test("detects NSFW keywords in an invite destination server name", async () => {
   });
 });
 
+test("ignores negated NSFW labels and generic adults-only labels", async () => {
+  assert.equal(findNsfwServerKeyword("No NSFW content here", NSFW_SERVER_KEYWORDS), null);
+  assert.equal(findNsfwServerKeyword("NSFW is not allowed", NSFW_SERVER_KEYWORDS), null);
+  assert.equal(findNsfwServerKeyword("No NSFW here, NSFW content is welcome", NSFW_SERVER_KEYWORDS), "nsfw");
+  assert.equal(findNsfwServerKeyword("Adults only", NSFW_SERVER_KEYWORDS), null);
+  assert.equal(findNsfwServerKeyword("Adult education community", NSFW_SERVER_KEYWORDS), null);
+
+  const invite = await findNsfwInvite(
+    "https://discord.gg/safe-community",
+    async () => ({
+      guildId: "123456789012345678",
+      guildName: "Adults only",
+      guildDescription: "No NSFW content here",
+    }),
+    NSFW_SERVER_KEYWORDS,
+  );
+
+  assert.equal(invite, null);
+});
+
 test("detects NSFW keywords in the invite destination description, tags, and emoji", async () => {
   const invite = await findNsfwInvite(
     "https://discord.gg/roblox-external",

@@ -35,6 +35,37 @@ export function normalizeNsfwKeywords(value) {
   ];
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function findKeywordMatches(text, keyword) {
+  const normalizedKeyword = normalizeNsfwServerText(keyword);
+
+  if (!normalizedKeyword) {
+    return [];
+  }
+
+  const pattern = new RegExp(
+    `(?<![\\p{L}\\p{N}])${escapeRegExp(normalizedKeyword)}(?![\\p{L}\\p{N}])`,
+    "gu",
+  );
+  return [...text.matchAll(pattern)];
+}
+
+function isNegatedNsfwMatch(text, match) {
+  const before = text.slice(Math.max(0, match.index - 32), match.index);
+  const after = text.slice(
+    match.index + match[0].length,
+    match.index + match[0].length + 64,
+  );
+
+  return (
+    /(?:^|\b)(?:no|without|not)\s*$/u.test(before) ||
+    /^\s+(?:(?:is|are)\s+)?(?:not\s+allowed|prohibited|forbidden|banned)\b/u.test(after)
+  );
+}
+
 export function findNsfwServerKeyword(serverName, keywords = nsfwKeywords) {
   const normalizedName = normalizeNsfwServerText(serverName);
 
@@ -43,9 +74,9 @@ export function findNsfwServerKeyword(serverName, keywords = nsfwKeywords) {
   }
 
   for (const keyword of normalizeNsfwKeywords(keywords)) {
-    const normalizedKeyword = normalizeNsfwServerText(keyword);
+    const matches = findKeywordMatches(normalizedName, keyword);
 
-    if (normalizedKeyword && normalizedName.includes(normalizedKeyword)) {
+    if (matches.some((match) => !isNegatedNsfwMatch(normalizedName, match))) {
       return keyword;
     }
   }
