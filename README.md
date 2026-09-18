@@ -360,7 +360,7 @@ Server administrators with **Manage Server** can configure the bot with:
 - `/setup excluded-role ...` to manage ignored roles.
 - `/setup excluded-administrators ...` to include or exclude server administrators.
 - `/setup anti-raid` to enable or configure anti-raid protection.
-- `/setup bot-detection enabled:true` to include messages sent by bots in detections. This is disabled by default.
+- `/setup bot-detection enabled:true` to include messages sent by bots in detection and moderation. This is disabled by default.
 - `/setup status` to review the current configuration.
 
 ### Easter eggs
@@ -550,7 +550,8 @@ commands require the **Manage Server** permission and their responses are only
 visible to the administrator who runs them.
 
 Messages sent by bots are ignored by default. To include them in this server's
-detections, use `/setup bot-detection enabled:true`; use
+detection and moderation flow, use `/setup bot-detection enabled:true`; matching
+messages are handled like any other detected message and deleted. Use
 `/setup bot-detection enabled:false` to disable it again.
 
 If a moderation channel has not been configured yet, the bot still scans and

@@ -87,7 +87,7 @@ test("configures bot message detection per server", async () => {
   await handler(interaction);
 
   assert.deepEqual(saved, { guildId: "guild-1", enabled: true });
-  assert.match(replies[0].content, /detección de mensajes de bots está activada/i);
+  assert.match(replies[0].content, /detección y moderación de mensajes de bots está activada/i);
 });
 
 test("shows global analytics only to moderators and administrators", async () => {

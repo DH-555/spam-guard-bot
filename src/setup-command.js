@@ -44,10 +44,10 @@ const setupCommand = new SlashCommandBuilder()
       .addChoices({ name: "high", value: RAID_LEVELS.HIGH }, { name: "medium", value: RAID_LEVELS.MEDIUM }, { name: "low", value: RAID_LEVELS.LOW })))
   .addSubcommand((subcommand) => subcommand
     .setName("bot-detection")
-    .setDescription("Include messages sent by bots in detections.")
+    .setDescription("Include and moderate messages sent by bots.")
     .addBooleanOption((option) => option
       .setName("enabled")
-      .setDescription("Whether messages sent by bots should be detected.")
+      .setDescription("Whether bot messages should be detected and moderated.")
       .setRequired(true)))
   .addSubcommandGroup((group) =>
     group
