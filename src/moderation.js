@@ -85,12 +85,21 @@ async function findMatchingImage(
   paranoiaLevel,
   resolveInvite,
   maliciousGuildIds,
+  {
+    blockedLinkEnabled = true,
+    nsfwServerEnabled = true,
+    nsfwServerKeywords = NSFW_SERVER_KEYWORDS,
+  } = {},
 ) {
   const imageSources = getMessageImageSources(message);
   const hasEasterEggMatcher =
     easterEggMatcher && easterEggMatcher.references?.length > 0;
   const shouldCheckMaliciousInvites =
     typeof resolveInvite === "function" && maliciousGuildIds?.length > 0;
+  const shouldCheckNsfwInvites =
+    typeof resolveInvite === "function" && nsfwServerEnabled;
+  const shouldCheckImageLinks =
+    blockedLinkEnabled || shouldCheckMaliciousInvites || shouldCheckNsfwInvites;
 
   for (const source of imageSources) {
     const knownScamImageChannel = [
@@ -129,6 +138,81 @@ async function findMatchingImage(
       );
       await assertSafeImageDimensions(image, config.maxImagePixels);
       const downloadMs = performance.now() - downloadStartedAt;
+
+      let ocrText = "";
+      let ocrAttempted = false;
+      let lowText = null;
+      const recognizeOcr = ocrService.recognize?.bind(ocrService) ??
+        ocrService.recognizeWithFallback?.bind(ocrService);
+      const recognizePass = (effort) => recognizeOcr(image, {
+        effort,
+        shouldStop: (recognizedText) =>
+          containsScamPhrase(recognizedText, paranoiaLevel),
+      });
+      const findImageLinkMatch = async (text) => {
+        if (!text || !shouldCheckImageLinks) {
+          return null;
+        }
+
+        if (blockedLinkEnabled) {
+          const blockedLink = findBlockedLink(text);
+          if (blockedLink) {
+            return { kind: "blockedLink", blockedLink };
+          }
+        }
+
+        if (shouldCheckMaliciousInvites) {
+          const maliciousInvite = await findMaliciousInvite(
+            text,
+            maliciousGuildIds,
+            resolveInvite,
+          );
+          if (maliciousInvite) {
+            return { kind: "maliciousServerInvite", maliciousInvite };
+          }
+        }
+
+        if (shouldCheckNsfwInvites) {
+          const nsfwInvite = await findNsfwInvite(
+            text,
+            resolveInvite,
+            nsfwServerKeywords,
+          );
+          if (nsfwInvite) {
+            return { kind: "nsfwServerInvite", nsfwInvite };
+          }
+        }
+
+        return null;
+      };
+
+      // Link protections must run before visual matching. Otherwise a visual
+      // match would return early and an invite or blocked domain printed in the
+      // image would never reach the same filters as a text link.
+      if (recognizeOcr && shouldCheckImageLinks) {
+        try {
+          ocrAttempted = true;
+          lowText = await recognizePass(OCR_EFFORTS.LOW);
+          ocrText = lowText;
+          const imageLinkMatch = await findImageLinkMatch(lowText);
+          if (imageLinkMatch) {
+            return {
+              source,
+              ...imageLinkMatch,
+              text: lowText,
+              ocrReasons: imageLinkMatch.kind === "maliciousServerInvite"
+                ? [OCR_DETECTION_REASONS.MALICIOUS_SERVER]
+                : [],
+            };
+          }
+        } catch (error) {
+          console.error(`[Image OCR] Could not scan ${sanitizeLogText(source.label)} for links:`, error);
+          ocrText = "";
+          lowText = null;
+          ocrAttempted = false;
+        }
+      }
+
       const visualStartedAt = performance.now();
       const visualMatch = visualMatcher ? await visualMatcher.match(image) : null;
       const visualMs = performance.now() - visualStartedAt;
@@ -161,40 +245,28 @@ async function findMatchingImage(
           source,
           kind: "visual",
           visualMatch,
+          ocrAttempted,
+          text: ocrText,
         };
       }
 
-      let ocrText = "";
-      let ocrAttempted = false;
-      const recognizeOcr = ocrService.recognize?.bind(ocrService) ??
-        ocrService.recognizeWithFallback?.bind(ocrService);
-
       if (recognizeOcr) {
-        ocrAttempted = true;
-        const recognizePass = (effort) => recognizeOcr(image, {
-          effort,
-          shouldStop: (recognizedText) =>
-            containsScamPhrase(recognizedText, paranoiaLevel),
-        });
         const lowStartedAt = performance.now();
-        const lowText = await recognizePass(OCR_EFFORTS.LOW);
-        ocrText = lowText;
-        let maliciousInvite = shouldCheckMaliciousInvites
-          ? await findMaliciousInvite(lowText, maliciousGuildIds, resolveInvite)
-          : null;
-
-        if (maliciousInvite) {
-          console.log(
-            `[Image analysis] ${sanitizeLogText(source.label)}: malicious server invite found in OCR ` +
-              `(guild ${maliciousInvite.guildId}; OCR low ${(performance.now() - lowStartedAt).toFixed(0)} ms).`,
-          );
-          return {
-            source,
-            kind: "maliciousServerInvite",
-            maliciousInvite,
-            text: lowText,
-            ocrReasons: [OCR_DETECTION_REASONS.MALICIOUS_SERVER],
-          };
+        if (lowText === null) {
+          ocrAttempted = true;
+          lowText = await recognizePass(OCR_EFFORTS.LOW);
+          ocrText = lowText;
+          const imageLinkMatch = await findImageLinkMatch(lowText);
+          if (imageLinkMatch) {
+            return {
+              source,
+              ...imageLinkMatch,
+              text: lowText,
+              ocrReasons: imageLinkMatch.kind === "maliciousServerInvite"
+                ? [OCR_DETECTION_REASONS.MALICIOUS_SERVER]
+                : [],
+            };
+          }
         }
 
         if (ocrService.singlePass ||
@@ -220,9 +292,7 @@ async function findMatchingImage(
           const highStartedAt = performance.now();
           const highText = await recognizePass(OCR_EFFORTS.HIGH);
           ocrText = [lowText, highText].filter(Boolean).join("\n");
-          maliciousInvite = shouldCheckMaliciousInvites
-            ? await findMaliciousInvite(ocrText, maliciousGuildIds, resolveInvite)
-            : null;
+          const imageLinkMatch = await findImageLinkMatch(ocrText);
           const ocrMs = performance.now() - lowStartedAt;
 
           console.log(
@@ -232,17 +302,14 @@ async function findMatchingImage(
               `total ${(performance.now() - analysisStartedAt).toFixed(0)} ms).`,
           );
 
-          if (maliciousInvite) {
-            console.log(
-              `[Image analysis] ${sanitizeLogText(source.label)}: malicious server invite found in OCR ` +
-                `(guild ${maliciousInvite.guildId}; OCR low+high ${ocrMs.toFixed(0)} ms).`,
-            );
+          if (imageLinkMatch) {
             return {
               source,
-              kind: "maliciousServerInvite",
-              maliciousInvite,
+              ...imageLinkMatch,
               text: ocrText,
-              ocrReasons: [OCR_DETECTION_REASONS.MALICIOUS_SERVER],
+              ocrReasons: imageLinkMatch.kind === "maliciousServerInvite"
+                ? [OCR_DETECTION_REASONS.MALICIOUS_SERVER]
+                : [],
             };
           }
 
@@ -343,7 +410,7 @@ async function sendModerationAlert(
       {
         name: t(locale, "moderation", "recognizedText"),
         value:
-          match.kind === "visual" ||
+          (match.kind === "visual" && !match.ocrAttempted) ||
           (match.kind === "knownScamImageChannel" && !match.ocrAttempted)
             ? t(
                 locale,
@@ -499,6 +566,7 @@ async function sendNsfwServerAlert(
   timeoutMs,
   moderationChannelId,
   locale,
+  recognizedText = null,
 ) {
   if (!moderationChannelId) {
     await sendFallbackNotice(message, locale);
@@ -531,6 +599,14 @@ async function sendNsfwServerAlert(
         { name: t(locale, "moderation", "inviteCode"), value: `\`${nsfwInvite.code}\``, inline: true },
         { name: t(locale, "moderation", "timeout", Math.round(timeoutMs / 60_000)), value: resultLabel(timeoutResult, locale), inline: true },
         { name: t(locale, "moderation", "messageDeleted"), value: resultLabel(deleteResult, locale), inline: true },
+      )
+      .addFields(
+        ...(recognizedText !== null
+          ? [{
+              name: t(locale, "moderation", "recognizedText"),
+              value: safeEmbedText(recognizedText) || t(locale, "moderation", "emptyText"),
+            }]
+          : []),
       )
       .setTimestamp()],
     allowedMentions: { parse: [] },
@@ -946,6 +1022,11 @@ export function createMessageHandler({
       maliciousServer.enabled
         ? [...maliciousGuildIds, ...maliciousServer.blockedGuildIds]
         : [],
+      {
+        blockedLinkEnabled: blockedLinkProtection.enabled,
+        nsfwServerEnabled: nsfwServer.enabled,
+        nsfwServerKeywords,
+      },
     );
 
     if (!match) {
@@ -959,6 +1040,33 @@ export function createMessageHandler({
         console.error("[Moderation] Could not send the easter egg reply:", error);
       }
 
+      return;
+    }
+
+    if (match.kind === "blockedLink") {
+      recordAnalytics(analytics, "recordDetection", "blockedLink");
+      const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
+        message,
+        member,
+        timeoutMs,
+        "Blocked link found in image OCR.",
+        locale,
+      );
+
+      try {
+        await sendSpamAlert(
+          client,
+          message,
+          `Blocked link found in image: ${match.blockedLink}`,
+          timeoutResult,
+          deleteResult,
+          timeoutMs,
+          moderationChannelId,
+          locale,
+        );
+      } catch (error) {
+        console.error("[Blocked links] Could not send the image notification:", error);
+      }
       return;
     }
 
@@ -987,6 +1095,34 @@ export function createMessageHandler({
         );
       } catch (error) {
         console.error("[Malicious server protection] Could not send the notification:", error);
+      }
+      return;
+    }
+
+    if (match.kind === "nsfwServerInvite") {
+      recordAnalytics(analytics, "recordDetection", "nsfwServerInvite");
+      const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
+        message,
+        member,
+        timeoutMs,
+        "NSFW server invite found in image OCR.",
+        locale,
+      );
+
+      try {
+        await sendNsfwServerAlert(
+          client,
+          message,
+          match.nsfwInvite,
+          timeoutResult,
+          deleteResult,
+          timeoutMs,
+          moderationChannelId,
+          locale,
+          match.text,
+        );
+      } catch (error) {
+        console.error("[NSFW server protection] Could not send the image notification:", error);
       }
       return;
     }
