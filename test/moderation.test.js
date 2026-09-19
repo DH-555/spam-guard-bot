@@ -517,7 +517,7 @@ test("detects a malicious forwarded image and moderates the outer message", asyn
   }
 });
 
-test("matches a forwarded image hash before attempting OCR", async () => {
+test("checks image links before accepting a forwarded image hash match", async () => {
   const originalFetch = globalThis.fetch;
   const imageBuffer = await createHorizontalGradient(32, 32);
   globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
@@ -609,7 +609,7 @@ test("matches a forwarded image hash before attempting OCR", async () => {
 
     await handleMessage(message);
 
-    assert.equal(ocrCalls, 0);
+    assert.equal(ocrCalls, 1);
     assert.equal(deleted, 1);
     assert.equal(timeoutCalls, 1);
   } finally {
@@ -1017,6 +1017,132 @@ test("resolves malicious Discord invites found inside image OCR", async () => {
       moderationMessages[0].embeds[0].data.fields.find((field) => field.name === "Detection method").value,
       "OCR + Malicious servers",
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("applies blocked-link, NSFW-invite, and malicious-invite filters to image OCR", async () => {
+  const originalFetch = globalThis.fetch;
+  const imageBuffer = await createHorizontalGradient(32, 32);
+  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
+
+  try {
+    const cases = [
+      {
+        id: "blocked-image-link",
+        ocrText: "Visit https://zangi.com now",
+        title: "Spam message blocked",
+        fetchInvite: async () => {
+          throw new Error("A blocked domain must not resolve an invite.");
+        },
+      },
+      {
+        id: "nsfw-image-invite",
+        ocrText: "JOIN DISCORD.GG/nsfw-image",
+        title: "NSFW server invite blocked",
+        fetchInvite: async () => ({
+          guild: { id: "987654321098765432", name: "NSFW Lounge" },
+        }),
+      },
+      {
+        id: "malicious-image-invite",
+        ocrText: "JOIN DISCORD.GG/malicious-image",
+        title: "Malicious server invite blocked",
+        fetchInvite: async () => ({
+          guild: { id: "123456789012345678", name: "Malicious server" },
+        }),
+      },
+    ];
+
+    for (const testCase of cases) {
+      const moderationMessages = [];
+      let deleted = 0;
+      let timeoutCalls = 0;
+      const message = {
+        id: testCase.id,
+        guildId: "guild-1",
+        channelId: "channel-1",
+        content: "",
+        author: {
+          id: `${testCase.id}-user`,
+          tag: `${testCase.id}#0001`,
+          bot: false,
+          displayAvatarURL: () => "https://example.com/avatar.png",
+          toString: () => `<@${testCase.id}-user>`,
+        },
+        channel: {
+          isTextBased: () => true,
+          isSendable: () => true,
+          send: async () => {},
+          toString: () => "<#channel-1>",
+        },
+        guild: { preferredLocale: "en-US", ownerId: "owner-1" },
+        attachments: new Map([
+          ["image", {
+            id: "image",
+            name: `${testCase.id}.png`,
+            contentType: "image/png",
+            size: imageBuffer.length,
+            url: imageUrl(testCase.id),
+          }],
+        ]),
+        embeds: [],
+        messageSnapshots: new Map(),
+        member: {
+          moderatable: true,
+          permissions: { has: () => false },
+          timeout: async () => { timeoutCalls += 1; },
+        },
+        delete: async () => { deleted += 1; },
+        webhookId: null,
+        inGuild: () => true,
+      };
+
+      const handleMessage = createMessageHandler({
+        client: {
+          fetchInvite: testCase.fetchInvite,
+          channels: {
+            fetch: async () => ({
+              isTextBased: () => true,
+              isSendable: () => true,
+              send: async (payload) => moderationMessages.push(payload),
+            }),
+          },
+        },
+        config: {
+          maxImageBytes: 4096,
+          maxImagePixels: 16_000_000,
+          imageDownloadTimeoutMs: 1000,
+          timeoutMs: 60_000,
+        },
+        ocrService: {
+          singlePass: true,
+          recognize: async () => testCase.ocrText,
+        },
+        maliciousGuildIds: ["123456789012345678"],
+        nsfwServerKeywords: ["nsfw"],
+        settingsStore: {
+          getModerationChannelId: () => "moderation-channel",
+          getParanoiaLevel: () => "high",
+          getExcludedRoleIds: () => [],
+          getExcludedAdministrators: () => true,
+          getTimeoutMs: () => null,
+          getBlockedLinkProtection: () => ({ enabled: true }),
+          getMaliciousServerProtection: () => ({ enabled: true, blockedGuildIds: [] }),
+          getNsfwServerProtection: () => ({ enabled: true }),
+          getRaidProtection: () => ({ enabled: false }),
+          getSpamProtection: () => ({ enabled: false }),
+        },
+      });
+
+      await handleMessage(message);
+
+      assert.equal(deleted, 1, testCase.id);
+      assert.equal(timeoutCalls, 1, testCase.id);
+      assert.equal(moderationMessages.length, 1, testCase.id);
+      assert.equal(moderationMessages[0].embeds[0].data.title, testCase.title);
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -1439,7 +1565,7 @@ test("deletes the whole message when only one image matches", async () => {
     await handleMessage(message);
 
     assert.equal(deleted, 1);
-    assert.equal(ocrCalls, 1);
+    assert.equal(ocrCalls, 2);
     assert.equal(channelMessages.length, 1);
     assert.match(channelMessages[0].content, /Message deleted: <@user-1>/);
   } finally {
