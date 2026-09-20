@@ -1,6 +1,12 @@
 import "dotenv/config";
 import { resolve } from "node:path";
-import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
+import {
+  ActivityType,
+  Client,
+  Events,
+  GatewayIntentBits,
+  MessageFlags,
+} from "discord.js";
 import { loadConfig } from "./config.js";
 import { createMessageHandler } from "./moderation.js";
 import { MALICIOUS_GUILD_IDS } from "./malicious-servers.js";
@@ -102,6 +108,10 @@ const handleSetupCommand = createSetupCommandHandler({
 
 client.once(Events.ClientReady, async (readyClient) => {
   console.log(`Bot connected as ${readyClient.user.tag}.`);
+  readyClient.user.setPresence({
+    activities: [{ name: "Protecting this server", type: ActivityType.Watching }],
+    status: "online",
+  });
 
   try {
     await registerSetupCommands(readyClient);
