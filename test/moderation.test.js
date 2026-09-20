@@ -437,7 +437,9 @@ test("times out before deleting spam and removes its single-message thread", asy
 test("detects a malicious forwarded image and moderates the outer message", async () => {
   const originalFetch = globalThis.fetch;
   const imageBuffer = await createHorizontalGradient(32, 32);
-  globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
+  globalThis.fetch = async () => {
+    throw new Error("A prohibited source channel must not download the image.");
+  };
   let deleted = 0;
   let timeoutCalls = 0;
   let ocrCalls = 0;
@@ -496,6 +498,11 @@ test("detects a malicious forwarded image and moderates the outer message", asyn
           return "";
         },
       },
+      visualMatcher: {
+        match: async () => {
+          throw new Error("A prohibited source channel must skip visual matching.");
+        },
+      },
       settingsStore: {
         getModerationChannelId: () => null,
         getParanoiaLevel: () => "high",
@@ -517,7 +524,7 @@ test("detects a malicious forwarded image and moderates the outer message", asyn
   }
 });
 
-test("checks image links before accepting a forwarded image hash match", async () => {
+test("deletes a forwarded image hash match without running OCR", async () => {
   const originalFetch = globalThis.fetch;
   const imageBuffer = await createHorizontalGradient(32, 32);
   globalThis.fetch = async () => createImageFetchResponse(imageBuffer);
@@ -609,7 +616,7 @@ test("checks image links before accepting a forwarded image hash match", async (
 
     await handleMessage(message);
 
-    assert.equal(ocrCalls, 1);
+    assert.equal(ocrCalls, 0);
     assert.equal(deleted, 1);
     assert.equal(timeoutCalls, 1);
   } finally {
@@ -1565,7 +1572,7 @@ test("deletes the whole message when only one image matches", async () => {
     await handleMessage(message);
 
     assert.equal(deleted, 1);
-    assert.equal(ocrCalls, 2);
+    assert.equal(ocrCalls, 1);
     assert.equal(channelMessages.length, 1);
     assert.match(channelMessages[0].content, /Message deleted: <@user-1>/);
   } finally {

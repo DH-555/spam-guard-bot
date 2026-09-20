@@ -110,6 +110,8 @@ async function findMatchingImage(
       .find(Boolean);
 
     if (knownScamImageChannel) {
+      // A prohibited source channel is terminal: delete before downloading,
+      // hashing, or running OCR on the image.
       console.log(
         `[Image analysis] ${sanitizeLogText(source.label)}: known scam-image source channel ` +
           `${knownScamImageChannel.channelId} (${knownScamImageChannel.name}).`,
@@ -186,33 +188,6 @@ async function findMatchingImage(
         return null;
       };
 
-      // Link protections must run before visual matching. Otherwise a visual
-      // match would return early and an invite or blocked domain printed in the
-      // image would never reach the same filters as a text link.
-      if (recognizeOcr && shouldCheckImageLinks) {
-        try {
-          ocrAttempted = true;
-          lowText = await recognizePass(OCR_EFFORTS.LOW);
-          ocrText = lowText;
-          const imageLinkMatch = await findImageLinkMatch(lowText);
-          if (imageLinkMatch) {
-            return {
-              source,
-              ...imageLinkMatch,
-              text: lowText,
-              ocrReasons: imageLinkMatch.kind === "maliciousServerInvite"
-                ? [OCR_DETECTION_REASONS.MALICIOUS_SERVER]
-                : [],
-            };
-          }
-        } catch (error) {
-          console.error(`[Image OCR] Could not scan ${sanitizeLogText(source.label)} for links:`, error);
-          ocrText = "";
-          lowText = null;
-          ocrAttempted = false;
-        }
-      }
-
       const visualStartedAt = performance.now();
       const visualMatch = visualMatcher ? await visualMatcher.match(image) : null;
       const visualMs = performance.now() - visualStartedAt;
@@ -235,6 +210,7 @@ async function findMatchingImage(
         }
       }
 
+      // A visual hash match is terminal: delete it without running OCR.
       if (visualMatch) {
         console.log(
           `[Image analysis] ${sanitizeLogText(source.label)}: visual match "${sanitizeLogText(visualMatch.reference.label)}" ` +
