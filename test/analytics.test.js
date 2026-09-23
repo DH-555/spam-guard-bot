@@ -5,20 +5,21 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { AnalyticsStore } from "../src/analytics.js";
 
-test("persists only anonymous aggregate counters", async () => {
+test("persists per-server and global aggregate counters", async () => {
   const directory = await mkdtemp(join(tmpdir(), "anti-mr-scam-analytics-"));
   const filePath = join(directory, "analytics.json");
   const store = new AnalyticsStore(filePath);
+  const guildId = "123456789012345678";
 
   await store.load();
-  await store.recordDetection("imageOcr");
-  await store.recordDetection("imageOcr");
-  await store.recordDetection("blockedLink");
-  await store.recordFeedback("true");
-  await store.recordFeedback("false");
-  await store.recordManualSpamReport();
+  await store.recordDetection(guildId, "imageOcr");
+  await store.recordDetection(guildId, "imageOcr");
+  await store.recordDetection(guildId, "blockedLink");
+  await store.recordFeedback(guildId, "true");
+  await store.recordFeedback(guildId, "false");
+  await store.recordManualSpamReport(guildId);
 
-  assert.deepEqual(store.getSnapshot(), {
+  const snapshot = {
     detections: {
       blockedLink: 1,
       textScam: 0,
@@ -33,26 +34,30 @@ test("persists only anonymous aggregate counters", async () => {
     },
     feedback: { correct: 1, false: 1 },
     manualSpamReports: 1,
-  });
+  };
+  assert.deepEqual(store.getSnapshot(guildId), snapshot);
+  assert.deepEqual(store.getGlobalSnapshot(), snapshot);
 
   const saved = JSON.parse(await readFile(filePath, "utf8"));
   assert.deepEqual(saved, {
-    version: 1,
-    stats: store.getSnapshot(),
+    version: 3,
+    global: snapshot,
+    servers: { [guildId]: snapshot },
   });
-  assert.deepEqual(Object.keys(saved), ["version", "stats"]);
-  assert.deepEqual(Object.keys(saved.stats), ["detections", "feedback", "manualSpamReports"]);
+  assert.deepEqual(Object.keys(saved), ["version", "global", "servers"]);
+  assert.deepEqual(Object.keys(saved.servers[guildId]), ["detections", "feedback", "manualSpamReports"]);
 });
 
 test("does not collect or expose analytics when disabled", async () => {
   const directory = await mkdtemp(join(tmpdir(), "anti-mr-scam-analytics-"));
   const filePath = join(directory, "analytics.json");
   const store = new AnalyticsStore(filePath, false);
+  const guildId = "123456789012345678";
 
   await store.load();
-  await store.recordDetection("imageOcr");
-  await store.recordFeedback("true");
-  await store.recordManualSpamReport();
+  await store.recordDetection(guildId, "imageOcr");
+  await store.recordFeedback(guildId, "true");
+  await store.recordManualSpamReport(guildId);
 
   assert.equal(store.isEnabled(), false);
   assert.equal(store.getSnapshot(), null);

@@ -25,7 +25,7 @@ function createAnalyticsSnapshot() {
   };
 }
 
-function createAnalyticsInteraction(hasPermission) {
+function createAnalyticsInteraction(hasPermission, scope = "analytics") {
   const replies = [];
   return {
     replies,
@@ -37,7 +37,7 @@ function createAnalyticsInteraction(hasPermission) {
       has: (permission) => hasPermission && permission === PermissionFlagsBits.ManageMessages,
     },
     options: {
-      getSubcommand: () => "analytics",
+      getSubcommand: () => scope,
     },
     reply: async (payload) => replies.push(payload),
   };
@@ -54,7 +54,7 @@ test("registers /setup as a panel and keeps analytics as a separate command", as
   });
 
   assert.deepEqual(commands.map((command) => command.name), ["setup", "spam"]);
-  assert.deepEqual(commands[1].options.map((option) => option.name), ["analytics"]);
+  assert.deepEqual(commands[1].options.map((option) => option.name), ["analytics", "global"]);
   assert.deepEqual(commands[0].options.map((option) => option.name), ["panel"]);
   assert.equal(commands[0].description_localizations["es-ES"], "Abre el panel de configuración del servidor.");
 });
@@ -123,9 +123,9 @@ test("opens the Spanish panel with protection buttons and sensitivity dropdowns"
 test("shows global analytics only to moderators and administrators", async () => {
   const handler = createSetupCommandHandler({
     config: { sendFeedback: true },
-    analytics: { getSnapshot: () => createAnalyticsSnapshot() },
+    analytics: { getGlobalSnapshot: () => createAnalyticsSnapshot() },
   });
-  const authorized = createAnalyticsInteraction(true);
+  const authorized = createAnalyticsInteraction(true, "global");
 
   await handler(authorized);
 
@@ -133,7 +133,7 @@ test("shows global analytics only to moderators and administrators", async () =>
   assert.match(authorized.replies[0].content, /todos los servidores/i);
   assert.match(authorized.replies[0].content, /Detecciones totales: 55/);
 
-  const unauthorized = createAnalyticsInteraction(false);
+  const unauthorized = createAnalyticsInteraction(false, "global");
   await handler(unauthorized);
 
   assert.equal(unauthorized.replies.length, 1);
