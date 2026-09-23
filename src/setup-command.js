@@ -38,10 +38,10 @@ const setupCommand = new SlashCommandBuilder()
 
 const spamCommand = new SlashCommandBuilder()
   .setName("spam")
-  .setDescription("View global anonymous spam analytics.")
+  .setDescription("View global or this server's spam analytics.")
   .setDescriptionLocalizations({
-    "es-ES": "Consulta las estadísticas globales y anónimas de spam.",
-    "es-419": "Consulta las estadísticas globales y anónimas de spam.",
+    "es-ES": "Consulta estadísticas globales o de este servidor.",
+    "es-419": "Consulta estadísticas globales o de este servidor.",
   })
   .setDefaultMemberPermissions(
     PermissionFlagsBits.ManageMessages | PermissionFlagsBits.ManageGuild,
@@ -50,12 +50,19 @@ const spamCommand = new SlashCommandBuilder()
   .addSubcommand((subcommand) =>
     subcommand
       .setName("analytics")
-      .setDescription("View anonymous statistics from all bot servers.")
+      .setDescription("View spam statistics from this server.")
       .setDescriptionLocalizations({
-        "es-ES": "Consulta estadísticas anónimas de todos los servidores.",
-        "es-419": "Consulta estadísticas anónimas de todos los servidores.",
+        "es-ES": "Consulta estadísticas de spam de este servidor.",
+        "es-419": "Consulta estadísticas de spam de este servidor.",
       }),
-  );
+  )
+  .addSubcommand((subcommand) => subcommand
+    .setName("global")
+    .setDescription("View combined spam statistics from all servers.")
+    .setDescriptionLocalizations({
+      "es-ES": "Consulta las estadísticas de spam de todos los servidores.",
+      "es-419": "Consulta las estadísticas de spam de todos los servidores.",
+    }));
 
 function formatParanoiaLevel(locale, level) {
   switch (normalizeParanoiaLevel(level)) {
@@ -104,7 +111,7 @@ export async function registerSetupCommandForGuild(guild) {
   await guild.commands.set([setupCommand.toJSON(), spamCommand.toJSON()]);
 }
 
-function formatAnalytics(locale, snapshot) {
+function formatAnalytics(locale, snapshot, global = false) {
   const { detections, feedback } = snapshot;
   const totalDetections = Object.values(detections).reduce(
     (total, count) => total + count,
@@ -112,8 +119,8 @@ function formatAnalytics(locale, snapshot) {
   );
 
   return [
-    t(locale, "setup", "analyticsTitle"),
-    t(locale, "setup", "analyticsScope"),
+    t(locale, "setup", global ? "analyticsGlobalTitle" : "analyticsTitle"),
+    t(locale, "setup", global ? "analyticsGlobalScope" : "analyticsScope"),
     "",
     `${t(locale, "setup", "analyticsTotalDetections")}: ${totalDetections}`,
     `${t(locale, "setup", "analyticsImageOcr")}: ${detections.imageOcr}`,
@@ -451,13 +458,16 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
         await interaction.reply({ content: t(locale, "setup", "analyticsPermissionRequired"), flags: MessageFlags.Ephemeral });
         return;
       }
-      if (interaction.options.getSubcommand() !== "analytics") return;
+      const analyticsScope = interaction.options.getSubcommand();
+      if (analyticsScope !== "analytics" && analyticsScope !== "global") return;
       if (config.sendFeedback === false) {
         await interaction.reply({ content: t(locale, "setup", "analyticsDisabled"), flags: MessageFlags.Ephemeral });
         return;
       }
       await interaction.reply({
-        content: formatAnalytics(locale, analytics?.getSnapshot?.() ?? createEmptyAnalyticsSnapshot()),
+        content: analyticsScope === "global"
+          ? formatAnalytics(locale, analytics?.getGlobalSnapshot?.() ?? createEmptyAnalyticsSnapshot(), true)
+          : formatAnalytics(locale, analytics?.getSnapshot?.(interaction.guildId) ?? createEmptyAnalyticsSnapshot()),
         flags: MessageFlags.Ephemeral,
       });
       return;

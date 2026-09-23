@@ -4,11 +4,11 @@ import { getTrustedImageUrls } from "./images.js";
 import { resolveLocale, t } from "./i18n.js";
 import { escapeDiscordMarkdown, sanitizeLogText } from "./security.js";
 
-function recordManualReportAnalytics(analytics) {
+function recordManualReportAnalytics(analytics, guildId) {
   if (typeof analytics?.recordManualSpamReport !== "function") return;
 
   try {
-    const result = analytics.recordManualSpamReport();
+    const result = analytics.recordManualSpamReport(guildId);
     if (result && typeof result.catch === "function") {
       void result.catch((error) => {
         console.warn("[Analytics] Could not record manual spam report:", error);
@@ -188,7 +188,7 @@ async function reportSpamMessage(client, guild, targetMessage, reporterTag, repo
   }
 
   if (sendFeedback) {
-    recordManualReportAnalytics(analytics);
+    recordManualReportAnalytics(analytics, guild.id);
   }
 
   return { deleted, timedOut };

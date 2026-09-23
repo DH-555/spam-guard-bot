@@ -10,11 +10,11 @@ const feedbacks = new Map();
 const FEEDBACK_TTL_MS = 15 * 60_000;
 const MAX_FEEDBACKS = 1_000;
 
-function recordFeedbackAnalytics(analytics, value) {
+function recordFeedbackAnalytics(analytics, guildId, value) {
   if (typeof analytics?.recordFeedback !== "function") return;
 
   try {
-    const result = analytics.recordFeedback(value);
+    const result = analytics.recordFeedback(guildId, value);
     if (result && typeof result.catch === "function") {
       void result.catch((error) => {
         console.warn("[Analytics] Could not record feedback:", error);
@@ -112,7 +112,7 @@ export async function handleDetectionFeedback(interaction, { sendFeedback = true
     files: feedback.imageUrls.map((url) => ({ attachment: url })),
     allowedMentions: { parse: [] },
   });
-  recordFeedbackAnalytics(analytics, value);
+  recordFeedbackAnalytics(analytics, feedback.guildId, value);
   feedbacks.delete(id);
   await interaction.update({ components: [] });
   return true;

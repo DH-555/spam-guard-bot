@@ -57,10 +57,11 @@ async function deleteAntiNovaVoidBoxMessage(message) {
       Routes.channelMessage(message.channelId, message.id),
       { reason },
     );
-    return;
+    return reason;
   }
 
   await message.delete(reason);
+  return reason;
 }
 
 function safeEmbedText(value, maxLength = 900) {
@@ -458,6 +459,29 @@ async function sendFallbackNotice(message, locale) {
   });
 }
 
+async function sendAntiNovaVoidBoxLog(client, message, moderationChannelId, reason) {
+  const channel = moderationChannelId
+    ? await client.channels.fetch(moderationChannelId)
+    : message.channel;
+  if (!channel?.isTextBased?.() || !channel.isSendable?.()) {
+    throw new Error("The Anti-Nova & VoidBox log channel is unavailable or cannot receive messages.");
+  }
+
+  await channel.send({
+    content: [
+      "🚨 **Anti-Nova & VoidBox: useless bot alarm**",
+      `Bot: ${safeEmbedText(message.author.tag ?? message.author.username ?? message.author.id, 128)} (${message.author.id})`,
+      `Canal: <#${message.channelId}>`,
+      `Mensaje: ${safeEmbedText(message.content || "(vacío)", 700)}`,
+      `Motivo: ${reason}`,
+      ...(!moderationChannelId
+        ? ["Configura un canal de avisos en `/setup panel` para enviar estos logs a un canal dedicado."]
+        : []),
+    ].join("\n"),
+    allowedMentions: { parse: [] },
+  });
+}
+
 async function sendRaidAlert(client, message, entries, timeoutMs, moderationChannelId, locale) {
   if (!moderationChannelId) return sendFallbackNotice(message, locale);
   const channel = await client.channels.fetch(moderationChannelId);
@@ -834,7 +858,13 @@ export function createMessageHandler({
       antiNovaVoidBox.enabled &&
       ANTI_NOVA_VOIDBOX_BOT_IDS.has(message.author.id)
     ) {
-      await deleteAntiNovaVoidBoxMessage(message);
+      const reason = await deleteAntiNovaVoidBoxMessage(message);
+      const moderationChannelId = settingsStore.getModerationChannelId?.(message.guildId);
+      try {
+        await sendAntiNovaVoidBoxLog(client, message, moderationChannelId, reason);
+      } catch (error) {
+        console.error("[Anti-Nova & VoidBox] Could not send the moderation log:", error);
+      }
       return;
     }
 
@@ -885,7 +915,7 @@ export function createMessageHandler({
 
     const blockedLink = blockedLinkProtection.enabled ? findBlockedLink(messageText) : null;
     if (blockedLink) {
-      recordAnalytics(analytics, "recordDetection", "blockedLink");
+      recordAnalytics(analytics, "recordDetection", message.guildId, "blockedLink");
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
         message, member, timeoutMs, "Blocked link protection triggered.", locale,
       );
@@ -912,7 +942,7 @@ export function createMessageHandler({
       message.author.createdTimestamp,
     );
     if (suspiciousText) {
-      recordAnalytics(analytics, "recordDetection", "textScam");
+      recordAnalytics(analytics, "recordDetection", message.guildId, "textScam");
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
         message, member, timeoutMs, "Suspicious scam advertisement detected.", locale,
       );
@@ -932,7 +962,7 @@ export function createMessageHandler({
       );
 
       if (maliciousInvite) {
-        recordAnalytics(analytics, "recordDetection", "maliciousServerInvite");
+        recordAnalytics(analytics, "recordDetection", message.guildId, "maliciousServerInvite");
         const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
           message, member, timeoutMs, "Malicious server invite protection triggered.", locale,
         );
@@ -963,7 +993,7 @@ export function createMessageHandler({
       );
 
       if (nsfwInvite) {
-        recordAnalytics(analytics, "recordDetection", "nsfwServerInvite");
+        recordAnalytics(analytics, "recordDetection", message.guildId, "nsfwServerInvite");
         const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
           message, member, timeoutMs, "NSFW server invite protection triggered.", locale,
         );
@@ -996,7 +1026,7 @@ export function createMessageHandler({
           : null,
       });
       if (raidEntries) {
-        recordAnalytics(analytics, "recordDetection", "raid");
+        recordAnalytics(analytics, "recordDetection", message.guildId, "raid");
         const timeoutResult = await Promise.allSettled([
           timeoutMember(message.guild, member, timeoutMs, "Anti-raid protection triggered.", locale),
         ]);
@@ -1014,7 +1044,7 @@ export function createMessageHandler({
       ? "Known spam user"
       : spam.enabled ? findSpamMessage(spamText) : null;
     if (spamMessage) {
-      recordAnalytics(analytics, "recordDetection", "spamMessage");
+      recordAnalytics(analytics, "recordDetection", message.guildId, "spamMessage");
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
         message, member, timeoutMs, "Spam message protection triggered.", locale,
       );
@@ -1061,7 +1091,7 @@ export function createMessageHandler({
     }
 
     if (match.kind === "blockedLink") {
-      recordAnalytics(analytics, "recordDetection", "blockedLink");
+      recordAnalytics(analytics, "recordDetection", message.guildId, "blockedLink");
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
         message,
         member,
@@ -1088,7 +1118,7 @@ export function createMessageHandler({
     }
 
     if (match.kind === "maliciousServerInvite") {
-      recordAnalytics(analytics, "recordDetection", "imageMaliciousServerInvite");
+      recordAnalytics(analytics, "recordDetection", message.guildId, "imageMaliciousServerInvite");
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
         message,
         member,
@@ -1117,7 +1147,7 @@ export function createMessageHandler({
     }
 
     if (match.kind === "nsfwServerInvite") {
-      recordAnalytics(analytics, "recordDetection", "nsfwServerInvite");
+      recordAnalytics(analytics, "recordDetection", message.guildId, "nsfwServerInvite");
       const { timeoutResult, deleteResult } = await timeoutThenDeleteMessage(
         message,
         member,
@@ -1154,7 +1184,7 @@ export function createMessageHandler({
       knownScamImageChannel: "imageKnownChannel",
     }[match.kind];
     if (ANALYTICS_DETECTION_TYPES.includes(analyticsType)) {
-      recordAnalytics(analytics, "recordDetection", analyticsType);
+      recordAnalytics(analytics, "recordDetection", message.guildId, analyticsType);
     }
 
     try {

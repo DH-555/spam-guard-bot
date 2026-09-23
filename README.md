@@ -145,20 +145,22 @@ Moderators can report a repeated message by replying to it with:
 The bot applies a timeout and removes matching messages from the user across
 the server's accessible text channels.
 
-## Global anonymous analytics
+## Global and per-server analytics
 
-Administrators and moderators can view aggregate statistics from all servers
-where the bot is installed with:
+Administrators and moderators can view statistics for the current server or
+combined statistics across all servers where the bot is installed:
 
 ```text
 /spam analytics
+/spam global
 ```
 
-The statistics contain only global counters for detections, manual spam
-reports, and feedback votes. They do not store server, user, message, image,
-URL, or OCR information, and they are not specific to the server where the
-command is run. `SEND_FEEDBACK=false` disables both collection and display of
-these statistics.
+The bot stores a global aggregate and separate counters for each server ID.
+Both include detections, manual spam reports, and feedback votes. They do not
+store user, message, image, URL, or OCR information. Historical global counters
+collected before per-server statistics were introduced remain in the global
+totals and cannot be attributed to an individual server.
+`SEND_FEEDBACK=false` disables both collection and display of these statistics.
 
 ## Malicious server invite protection
 
