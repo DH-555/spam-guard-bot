@@ -261,7 +261,10 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
   }
 
   function isAuthorized(interaction) {
-    return interaction.inGuild() && interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild);
+    return interaction.inGuild() && (
+      interaction.guild?.ownerId === interaction.user?.id
+      || interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)
+    );
   }
 
   async function denyUnauthorized(interaction) {
@@ -478,7 +481,7 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
       await interaction.reply({ content: t(locale, "setup", "onlyInServer"), flags: MessageFlags.Ephemeral });
       return;
     }
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+    if (!isAuthorized(interaction)) {
       await interaction.reply({ content: t(locale, "setup", "manageServerRequired"), flags: MessageFlags.Ephemeral });
       return;
     }
