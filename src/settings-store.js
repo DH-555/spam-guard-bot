@@ -94,6 +94,10 @@ export class SettingsStore {
     return { enabled: this.#settings[guildId]?.botDetection?.enabled === true };
   }
 
+  getAntiNovaVoidBox(guildId) {
+    return { enabled: this.#settings[guildId]?.antiNovaVoidBox?.enabled === true };
+  }
+
   getTextScamProtection(guildId) {
     const value = this.#settings[guildId]?.textScamProtection;
     return {
@@ -135,6 +139,14 @@ export class SettingsStore {
     this.#settings[guildId] = {
       ...this.#settings[guildId],
       botDetection: { enabled: Boolean(enabled) },
+    };
+    await this.#save();
+  }
+
+  async setAntiNovaVoidBox(guildId, enabled) {
+    this.#settings[guildId] = {
+      ...this.#settings[guildId],
+      antiNovaVoidBox: { enabled: Boolean(enabled) },
     };
     await this.#save();
   }

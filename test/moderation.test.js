@@ -149,7 +149,7 @@ test("moderates and posts a fallback notice when no moderation channel is config
     assert.match(channelMessages[0].content, /Mensaje borrado: <@user-1>/);
     assert.match(
       channelMessages[0].content,
-      /configura un canal de moderación con `\/setup moderation-channel`/,
+      /configura un canal de moderación en `\/setup panel`/,
     );
     assert.deepEqual(channelMessages[0].allowedMentions, {
       users: ["user-1"],

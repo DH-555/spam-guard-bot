@@ -1,4 +1,4 @@
-import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
+import { EmbedBuilder, PermissionFlagsBits, Routes } from "discord.js";
 import { performance } from "node:perf_hooks";
 import {
   containsScamPhrase,
@@ -30,6 +30,38 @@ import { ANALYTICS_DETECTION_TYPES } from "./analytics.js";
 const REASON =
   "Image detected by moderation rules.";
 const RECENT_THREAD_WINDOW_MS = 10 * 60_000;
+const ANTI_NOVA_VOIDBOX_BOT_IDS = new Set([
+  "1532889830294552778",
+  "1501887716550512710",
+]);
+const ANTI_NOVA_VOIDBOX_ROASTS = Object.freeze([
+  "su última neurona acaba de desconectarse",
+  "más útil como pisapapeles que como bot",
+  "ha respondido con el carisma de una tostadora mojada",
+  "su algoritmo ha pedido vacaciones indefinidas",
+  "hasta un captcha tiene más personalidad",
+  "otra alerta de ruido con patas digitales",
+  "la inteligencia artificial sigue buscando la inteligencia",
+  "se ha quedado pensando; no esperes demasiado",
+]);
+
+function antiNovaVoidBoxReason(random = Math.random) {
+  const index = Math.floor(random() * ANTI_NOVA_VOIDBOX_ROASTS.length);
+  return `Anti-Nova & VoidBox: useless bot alarm — ${ANTI_NOVA_VOIDBOX_ROASTS[index]}`;
+}
+
+async function deleteAntiNovaVoidBoxMessage(message) {
+  const reason = antiNovaVoidBoxReason();
+  if (message.client?.rest && message.channelId && message.id) {
+    await message.client.rest.delete(
+      Routes.channelMessage(message.channelId, message.id),
+      { reason },
+    );
+    return;
+  }
+
+  await message.delete(reason);
+}
 
 function safeEmbedText(value, maxLength = 900) {
   return escapeDiscordMarkdown(truncateText(value, maxLength), maxLength);
@@ -794,6 +826,15 @@ export function createMessageHandler({
   const resolveInvite = createInviteResolver(client);
   return async function handleMessage(message) {
     if (!message.inGuild() || message.webhookId) {
+      return;
+    }
+
+    const antiNovaVoidBox = settingsStore.getAntiNovaVoidBox?.(message.guildId) ?? { enabled: false };
+    if (
+      antiNovaVoidBox.enabled &&
+      ANTI_NOVA_VOIDBOX_BOT_IDS.has(message.author.id)
+    ) {
+      await deleteAntiNovaVoidBoxMessage(message);
       return;
     }
 
