@@ -62,6 +62,11 @@ const STRINGS = {
       reportedBy: "Reported by",
       originalServerChannel: "Original server/channel",
       recognizedText: "Text recognized by OCR",
+      antiNovaVoidBoxLogTitle: "Anti-Nova & VoidBox: useless bot alarm",
+      antiNovaVoidBoxLogBot: "Bot",
+      antiNovaVoidBoxLogMessage: "Message",
+      antiNovaVoidBoxLogReason: "Reason",
+      antiNovaVoidBoxLogNoChannel: "Set a moderation log channel in `/setup panel` to send these logs to a dedicated channel.",
     },
     setup: {
       panelDescription: "Server protection settings. Use the buttons and dropdowns to configure each option.",
@@ -237,6 +242,11 @@ const STRINGS = {
       reportedBy: "Reportado por",
       originalServerChannel: "Servidor/canal original",
       recognizedText: "Texto reconocido por OCR",
+      antiNovaVoidBoxLogTitle: "Anti-Nova & VoidBox: alarma de bots inútiles",
+      antiNovaVoidBoxLogBot: "Bot",
+      antiNovaVoidBoxLogMessage: "Mensaje",
+      antiNovaVoidBoxLogReason: "Motivo",
+      antiNovaVoidBoxLogNoChannel: "Configura un canal de avisos de moderación en `/setup panel` para enviar estos registros a un canal dedicado.",
     },
     setup: {
       panelDescription: "Configuración de protección del servidor. Usa los botones y menús para ajustar cada opción.",
