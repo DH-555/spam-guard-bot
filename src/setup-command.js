@@ -183,7 +183,9 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
           .setCustomId(`setup-select:paranoia:${guildId}`)
           .setPlaceholder(`${t(locale, "setup", "panelParanoiaSensitivity")}: ${formatParanoiaLevel(locale, paranoia)}`)
           .addOptions(Object.values(PARANOIA_LEVELS).map((level) => ({
-            label: formatParanoiaLevel(locale, level), value: level, default: level === paranoia,
+            label: `${t(locale, "setup", "panelParanoiaSensitivity")}: ${formatParanoiaLevel(locale, level)}`,
+            value: level,
+            default: level === paranoia,
           }))),
       ));
       rows.push(new ActionRowBuilder().addComponents(
@@ -191,7 +193,9 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
           .setCustomId(`setup-select:raid:${guildId}`)
           .setPlaceholder(`${t(locale, "setup", "panelRaidSensitivity")}: ${t(locale, "setup", `raidSensitivity${raid.level[0].toUpperCase()}${raid.level.slice(1)}`)}`)
           .addOptions(Object.values(RAID_LEVELS).map((level) => ({
-            label: t(locale, "setup", `raidSensitivity${level[0].toUpperCase()}${level.slice(1)}`), value: level, default: level === raid.level,
+            label: `${t(locale, "setup", "panelRaidSensitivity")}: ${t(locale, "setup", `raidSensitivity${level[0].toUpperCase()}${level.slice(1)}`)}`,
+            value: level,
+            default: level === raid.level,
           }))),
       ));
       rows.push(new ActionRowBuilder().addComponents(
@@ -230,6 +234,7 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
         new RoleSelectMenuBuilder()
           .setCustomId(`setup-role:remove:${guildId}`)
           .setPlaceholder(t(locale, "setup", excludedRoleIds.length ? "panelRemoveExcludedRoles" : "noExcludedRoles"))
+          .setDefaultRoles(excludedRoleIds.slice(0, 25))
           .setDisabled(excludedRoleIds.length === 0)
           .setMinValues(1).setMaxValues(25),
       ));
@@ -248,7 +253,6 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
         channelId ? t(locale, "setup", "currentSet", channelId) : t(locale, "setup", "notConfigured"),
         t(locale, "setup", "currentTimeout", formatTimeoutMinutes(timeoutMs)),
         t(locale, "setup", "currentExcludedRoles", roleSummary),
-        t(locale, "setup", "panelExcludedAdministratorsStatus", excludedAdministrators),
         t(locale, "setup", "panelBlockedServersStatus", blockSummary),
       ].join("\n");
     }
