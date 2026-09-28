@@ -866,6 +866,11 @@ export function createMessageHandler({
       return;
     }
 
+    const currentBotId = client.user?.id;
+    if (currentBotId && message.author.id === currentBotId) {
+      return;
+    }
+
     const antiNovaVoidBox = settingsStore.getAntiNovaVoidBox?.(message.guildId) ?? { enabled: false };
     if (
       antiNovaVoidBox.enabled &&

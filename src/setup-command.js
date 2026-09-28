@@ -183,7 +183,7 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
           .setCustomId(`setup-select:paranoia:${guildId}`)
           .setPlaceholder(`${t(locale, "setup", "panelParanoiaSensitivity")}: ${formatParanoiaLevel(locale, paranoia)}`)
           .addOptions(Object.values(PARANOIA_LEVELS).map((level) => ({
-            label: `${t(locale, "setup", "panelParanoiaSensitivity")}: ${formatParanoiaLevel(locale, level)}`,
+            label: formatParanoiaLevel(locale, level),
             value: level,
             default: level === paranoia,
           }))),
