@@ -154,7 +154,6 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
     const malicious = settingsStore.getMaliciousServerProtection(guildId);
     const nsfw = settingsStore.getNsfwServerProtection(guildId);
     const botDetection = settingsStore.getBotDetection(guildId);
-    const antiNovaVoidBox = settingsStore.getAntiNovaVoidBox?.(guildId) ?? { enabled: false };
     const textScams = settingsStore.getTextScamProtection(guildId);
     const paranoia = settingsStore.getParanoiaLevel(guildId);
     const rows = [];
@@ -168,7 +167,6 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
         ["malicious", "panelMaliciousInvites", malicious.enabled],
         ["nsfw", "panelNsfwInvites", nsfw.enabled],
         ["bots", "panelBotDetection", botDetection.enabled],
-        ["antiNovaVoidBox", "panelAntiNovaVoidBox", antiNovaVoidBox.enabled],
         ["textRemoteJobs", "panelRemoteJobs", textScams.remoteJobs],
         ["textGiveaways", "panelGiveaways", textScams.giveaways],
         ["excludedAdministrators", "panelExcludedAdministrators", settingsStore.getExcludedAdministrators(guildId)],
@@ -373,7 +371,6 @@ export function createSetupCommandHandler({ settingsStore, config, analytics }) 
         case "malicious": await settingsStore.setMaliciousServerProtection(guildId, !settingsStore.getMaliciousServerProtection(guildId).enabled); break;
         case "nsfw": await settingsStore.setNsfwServerProtection(guildId, !settingsStore.getNsfwServerProtection(guildId).enabled); break;
         case "bots": await settingsStore.setBotDetection(guildId, !settingsStore.getBotDetection(guildId).enabled); break;
-        case "antiNovaVoidBox": await settingsStore.setAntiNovaVoidBox(guildId, !settingsStore.getAntiNovaVoidBox(guildId).enabled); break;
         case "textRemoteJobs": {
           const current = settingsStore.getTextScamProtection(guildId);
           await settingsStore.setTextScamProtection(guildId, { remoteJobs: !current.remoteJobs });

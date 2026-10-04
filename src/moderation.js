@@ -1,4 +1,4 @@
-import { EmbedBuilder, PermissionFlagsBits, Routes } from "discord.js";
+import { EmbedBuilder, PermissionFlagsBits } from "discord.js";
 import { performance } from "node:perf_hooks";
 import {
   containsScamPhrase,
@@ -30,53 +30,6 @@ import { ANALYTICS_DETECTION_TYPES } from "./analytics.js";
 const REASON =
   "Image detected by moderation rules.";
 const RECENT_THREAD_WINDOW_MS = 10 * 60_000;
-const ANTI_NOVA_VOIDBOX_BOT_IDS = new Set([
-  "1532889830294552778",
-  "1501887716550512710",
-]);
-const ANTI_NOVA_VOIDBOX_ROASTS = Object.freeze({
-  en: [
-    "its last neuron just disconnected",
-    "more useful as a paperweight than a bot",
-    "replied with the charm of a soggy toaster",
-    "its algorithm has requested indefinite vacation",
-    "even a CAPTCHA has more personality",
-    "another digital noise alarm",
-    "the artificial intelligence is still looking for intelligence",
-    "it is still thinking; do not hold your breath",
-  ],
-  es: [
-    "su última neurona acaba de desconectarse",
-    "más útil como pisapapeles que como bot",
-    "ha respondido con el carisma de una tostadora mojada",
-    "su algoritmo ha pedido vacaciones indefinidas",
-    "hasta un captcha tiene más personalidad",
-    "otra alerta de ruido con patas digitales",
-    "la inteligencia artificial sigue buscando la inteligencia",
-    "se ha quedado pensando; no esperes demasiado",
-  ],
-});
-
-function antiNovaVoidBoxReason(locale, random = Math.random) {
-  const roasts = locale === "es" ? ANTI_NOVA_VOIDBOX_ROASTS.es : ANTI_NOVA_VOIDBOX_ROASTS.en;
-  const index = Math.floor(random() * roasts.length);
-  return `Anti-Nova & VoidBox: useless bot alarm — ${roasts[index]}`;
-}
-
-async function deleteAntiNovaVoidBoxMessage(message, locale) {
-  const reason = antiNovaVoidBoxReason(locale);
-  if (message.client?.rest && message.channelId && message.id) {
-    await message.client.rest.delete(
-      Routes.channelMessage(message.channelId, message.id),
-      { reason },
-    );
-    return reason;
-  }
-
-  await message.delete(reason);
-  return reason;
-}
-
 function safeEmbedText(value, maxLength = 900) {
   return escapeDiscordMarkdown(truncateText(value, maxLength), maxLength);
 }
@@ -472,29 +425,6 @@ async function sendFallbackNotice(message, locale) {
   });
 }
 
-async function sendAntiNovaVoidBoxLog(client, message, moderationChannelId, reason, locale) {
-  const channel = moderationChannelId
-    ? await client.channels.fetch(moderationChannelId)
-    : message.channel;
-  if (!channel?.isTextBased?.() || !channel.isSendable?.()) {
-    throw new Error("The Anti-Nova & VoidBox log channel is unavailable or cannot receive messages.");
-  }
-
-  await channel.send({
-    content: [
-      `🚨 **${t(locale, "moderation", "antiNovaVoidBoxLogTitle")}**`,
-      `${t(locale, "moderation", "antiNovaVoidBoxLogBot")}: ${safeEmbedText(message.author.tag ?? message.author.username ?? message.author.id, 128)} (${message.author.id})`,
-      `${t(locale, "moderation", "channel")}: <#${message.channelId}>`,
-      `${t(locale, "moderation", "antiNovaVoidBoxLogMessage")}: ${safeEmbedText(message.content || t(locale, "moderation", "emptyText"), 700)}`,
-      `${t(locale, "moderation", "antiNovaVoidBoxLogReason")}: ${reason}`,
-      ...(!moderationChannelId
-        ? [t(locale, "moderation", "antiNovaVoidBoxLogNoChannel")]
-        : []),
-    ].join("\n"),
-    allowedMentions: { parse: [] },
-  });
-}
-
 async function sendRaidAlert(client, message, entries, timeoutMs, moderationChannelId, locale) {
   if (!moderationChannelId) return sendFallbackNotice(message, locale);
   const channel = await client.channels.fetch(moderationChannelId);
@@ -868,22 +798,6 @@ export function createMessageHandler({
 
     const currentBotId = client.user?.id;
     if (currentBotId && message.author.id === currentBotId) {
-      return;
-    }
-
-    const antiNovaVoidBox = settingsStore.getAntiNovaVoidBox?.(message.guildId) ?? { enabled: false };
-    if (
-      antiNovaVoidBox.enabled &&
-      ANTI_NOVA_VOIDBOX_BOT_IDS.has(message.author.id)
-    ) {
-      const locale = resolveLocale(message.guild);
-      const reason = await deleteAntiNovaVoidBoxMessage(message, locale);
-      const moderationChannelId = settingsStore.getModerationChannelId?.(message.guildId);
-      try {
-        await sendAntiNovaVoidBoxLog(client, message, moderationChannelId, reason, locale);
-      } catch (error) {
-        console.error("[Anti-Nova & VoidBox] Could not send the moderation log:", error);
-      }
       return;
     }
 
