@@ -36,6 +36,7 @@ test("detects blocked domains and their subdomains", () => {
   assert.ok(findBlockedLink("https://zangi.com"));
   assert.ok(findBlockedLink("https://www.zangi.com/download"));
   assert.ok(findBlockedLink("http://support.eu.zangi.com:8080/help"));
+  assert.equal(findBlockedLink("https://velewin.com/promo"), "https://velewin.com/promo");
 });
 
 test("does not block domains that only contain a blocked domain as a suffix", () => {
