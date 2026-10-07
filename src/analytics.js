@@ -10,7 +10,6 @@ export const ANALYTICS_DETECTION_TYPES = Object.freeze([
   "spamMessage",
   "imageOcr",
   "imageVisual",
-  "imageKnownChannel",
   "imageMaliciousServerInvite",
 ]);
 

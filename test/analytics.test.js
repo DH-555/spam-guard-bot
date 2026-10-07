@@ -29,7 +29,6 @@ test("persists per-server and global aggregate counters", async () => {
       spamMessage: 0,
       imageOcr: 2,
       imageVisual: 0,
-      imageKnownChannel: 0,
       imageMaliciousServerInvite: 0,
     },
     feedback: { correct: 1, false: 1 },

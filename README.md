@@ -44,23 +44,6 @@ The default paranoia level is `high`.
 The blocked domain list is copied into the Docker image. Rebuild and redeploy
 the image after changing it.
 
-## Known scam-image source channels
-
-The bot also checks the source channel embedded in Discord attachment URLs
-(`.../attachments/<channel_id>/...`). The current list is maintained in
-[`scam-image-channels.json`](scam-image-channels.json) and contains the channel
-ID observed as a repeated source of MrBeast scam images:
-
-| Channel ID | Description |
-| --- | --- |
-| `740463504602955806` | MrBeast scam images |
-
-An image from a listed channel is blocked and the moderation alert identifies
-the source channel. Forwarded images are also sent through OCR before this
-fallback signal is applied. This signal only works when Discord preserves
-the original attachment URL; a re-uploaded image receives a new channel ID and
-still relies on visual matching or OCR.
-
 ## Anti-raid protection
 
 The bot includes an anti-raid protection that detects when a user sends the

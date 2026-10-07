@@ -17,7 +17,6 @@ function createAnalyticsSnapshot() {
       spamMessage: 6,
       imageOcr: 7,
       imageVisual: 8,
-      imageKnownChannel: 9,
       imageMaliciousServerInvite: 10,
     },
     feedback: { correct: 11, false: 12 },

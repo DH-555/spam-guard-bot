@@ -22,7 +22,6 @@ import { getRaidFingerprint, RaidTracker } from "./raid-protection.js";
 import { findSpamMessage, getMessageText } from "./spam-messages.js";
 import { isKnownSpamUser } from "./spam-users.js";
 import { createDetectionFeedback } from "./detection-feedback.js";
-import { findKnownScamImageChannel } from "./scam-image-channels.js";
 import { OCR_EFFORTS } from "./ocr.js";
 import { escapeDiscordMarkdown, sanitizeLogText } from "./security.js";
 import { ANALYTICS_DETECTION_TYPES } from "./analytics.js";
@@ -101,27 +100,6 @@ async function findMatchingImage(
     blockedLinkEnabled || shouldCheckMaliciousInvites || shouldCheckNsfwInvites;
 
   for (const source of imageSources) {
-    const knownScamImageChannel = [
-      source.url,
-      ...(source.alternateUrls ?? []),
-    ]
-      .map((url) => findKnownScamImageChannel(url))
-      .find(Boolean);
-
-    if (knownScamImageChannel) {
-      // A prohibited source channel is terminal: delete before downloading,
-      // hashing, or running OCR on the image.
-      console.log(
-        `[Image analysis] ${sanitizeLogText(source.label)}: known scam-image source channel ` +
-          `${knownScamImageChannel.channelId} (${knownScamImageChannel.name}).`,
-      );
-      return {
-        source,
-        kind: "knownScamImageChannel",
-        knownScamImageChannel,
-      };
-    }
-
     if (source.size !== null && source.size > config.maxImageBytes) {
       console.warn(
         `[OCR] Image skipped because of its size (${source.size} bytes): ${sanitizeLogText(source.label)}`,
@@ -335,14 +313,6 @@ async function sendModerationAlert(
           safeEmbedText(match.visualMatch.reference.label, 256),
           match.visualMatch.distance,
         )
-      : match.kind === "knownScamImageChannel"
-        ? t(
-            locale,
-            "moderation",
-            "knownScamImageChannel",
-            safeEmbedText(match.knownScamImageChannel.name, 256),
-            match.knownScamImageChannel.channelId,
-          )
       : match.kind === "easterEgg"
         ? t(locale, "moderation", "easterEggMatch")
       : ocrDetectionMethod(locale, match.ocrReasons);
@@ -385,13 +355,8 @@ async function sendModerationAlert(
       {
         name: t(locale, "moderation", "recognizedText"),
         value:
-          (match.kind === "visual" && !match.ocrAttempted) ||
-          (match.kind === "knownScamImageChannel" && !match.ocrAttempted)
-            ? t(
-                locale,
-                "moderation",
-                match.kind === "visual" ? "ocrSkipped" : "knownChannelOcrSkipped",
-              )
+          match.kind === "visual" && !match.ocrAttempted
+            ? t(locale, "moderation", "ocrSkipped")
             : safeEmbedText(match.text) || t(locale, "moderation", "emptyText"),
       },
     )
@@ -1114,7 +1079,6 @@ export function createMessageHandler({
     const analyticsType = {
       ocr: "imageOcr",
       visual: "imageVisual",
-      knownScamImageChannel: "imageKnownChannel",
     }[match.kind];
     if (ANALYTICS_DETECTION_TYPES.includes(analyticsType)) {
       recordAnalytics(analytics, "recordDetection", message.guildId, analyticsType);

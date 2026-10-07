@@ -131,7 +131,6 @@ function formatAnalytics(locale, snapshot, global = false) {
     `${t(locale, "setup", "analyticsMaliciousInvite")}: ${detections.maliciousServerInvite + detections.imageMaliciousServerInvite}`,
     `${t(locale, "setup", "analyticsNsfwInvite")}: ${detections.nsfwServerInvite}`,
     `${t(locale, "setup", "analyticsRaid")}: ${detections.raid}`,
-    `${t(locale, "setup", "analyticsKnownChannel")}: ${detections.imageKnownChannel}`,
     "",
     `${t(locale, "setup", "analyticsManualReports")}: ${snapshot.manualSpamReports}`,
     `${t(locale, "setup", "analyticsCorrectFeedback")}: ${feedback.correct}`,
