@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { normalizeObfuscatedLinkText } from "./link-normalization.js";
 
 const blockedDomainsPath = fileURLToPath(
   new URL("../blocked-domains.json", import.meta.url),
@@ -72,14 +73,16 @@ export function findBlockedLink(text) {
     return null;
   }
 
+  const searchableText = normalizeObfuscatedLinkText(text);
+
   for (const pattern of BLOCKED_LINK_PATTERNS) {
-    const match = text.match(pattern);
+    const match = searchableText.match(pattern);
     if (match) {
       return match[0];
     }
   }
 
-  return findBlockedDomain(text);
+  return findBlockedDomain(searchableText);
 }
 
 export function findBlockedDomain(text) {
@@ -87,7 +90,7 @@ export function findBlockedDomain(text) {
     return null;
   }
 
-  const searchableText = text.normalize("NFKC");
+  const searchableText = normalizeObfuscatedLinkText(text);
 
   for (const { domain, pattern } of BLOCKED_DOMAIN_OCR_PATTERNS) {
     if (pattern.test(searchableText)) {

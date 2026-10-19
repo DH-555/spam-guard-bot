@@ -116,6 +116,8 @@ protection per server:
 También se pueden bloquear dominios completos, incluidos sus subdominios. El
 listado global está en [blocked-domains.json](blocked-domains.json). Incluye
 `zangi.com` y los dominios maliciosos detectados por OCR en imágenes.
+La detección normaliza enlaces ofuscados como `https\://example[.]com`, tanto
+para los dominios bloqueados como para los enlaces de invitación de Discord.
 
 ## Manual spam reports
 

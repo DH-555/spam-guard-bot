@@ -1,3 +1,5 @@
+import { normalizeObfuscatedLinkText } from "./link-normalization.js";
+
 const DISCORD_INVITE_PATTERN =
   /(?<![a-z0-9_-])(?:https?:\/\/)?(?:www\.)?(?:discord\.gg|discord(?:app)?\.com\/invite)\/([a-z0-9_-]{1,64})(?![a-z0-9_-])/giu;
 
@@ -40,10 +42,12 @@ function compactObfuscatedText(value) {
 
 function getInviteTextVariants(content) {
   const decoded = decodeUrlEncoding(content);
-  const compact = compactObfuscatedText(content);
-  const compactDecoded = compactObfuscatedText(decoded);
+  const normalized = normalizeObfuscatedLinkText(content);
+  const normalizedDecoded = normalizeObfuscatedLinkText(decoded);
+  const compact = compactObfuscatedText(normalized);
+  const compactDecoded = compactObfuscatedText(normalizedDecoded);
 
-  return [...new Set([content, decoded, compact, compactDecoded])];
+  return [...new Set([content, decoded, normalized, normalizedDecoded, compact, compactDecoded])];
 }
 
 export function extractDiscordInviteCodes(content) {
