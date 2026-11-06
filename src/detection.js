@@ -6,6 +6,19 @@ const USDT_KEYWORDS = ["USDT"];
 const AMOUNT_KEYWORDS = ["AMOUNT"];
 const COMPLETED_KEYWORDS = ["COMPLETED"];
 const TRANSFER_KEYWORDS = ["TRANSFER"];
+const MR_BEAST_WITHDRAWAL_PHRASE = /\bYOUR\s+WITHDRAWALL\s+WAS\s+SUCCESSFULL\b/u;
+const MR_BEAST_WITHDRAWAL_AMOUNTS = [
+  "3400.00",
+  "3400",
+  "3,400.11",
+  "3.400",
+  "3,400",
+  "3.400,11",
+  "340011",
+  "3400,11",
+  "3400.11",
+  "3,400,11",
+];
 const EXTREME_KEYWORDS = [
   "WITHDRAWAL",
   "AMOUNT",
@@ -127,6 +140,16 @@ export function findOcrDetectionReasons(
   }
 
   if (normalizedLevel === PARANOIA_LEVELS.LOW) {
+    const normalizedText = normalizeOcrText(text);
+    const hasMrBeastWithdrawalPhrase = MR_BEAST_WITHDRAWAL_PHRASE.test(normalizedText);
+    const hasMrBeastWithdrawalAmount = MR_BEAST_WITHDRAWAL_AMOUNTS.some((amount) =>
+      new RegExp(`(?<!\\d)${amount.replaceAll(".", "\\.")}(?!\\d)`, "u").test(normalizedText),
+    );
+
+    if (hasMrBeastWithdrawalPhrase && hasMrBeastWithdrawalAmount) {
+      reasons.push(OCR_DETECTION_REASONS.MR_BEAST);
+    }
+
     return reasons;
   }
 
